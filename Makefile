@@ -2,9 +2,9 @@
 .SUFFIXES:
 
 TARGET := noded
-OBJECTS := noded.o
+OBJECTS := noded.o token.o scanner.o util.o
 
-CFLAGS := --std=c90 -Werror -Wall -Wpedantic
+CFLAGS := -g --std=c99 -Werror -Wall -Wextra -Wpedantic
 LDLIBS :=
 
 
