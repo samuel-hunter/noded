@@ -1,0 +1,6 @@
+/* cat.nod
+ * Redirect input to output
+ */
+
+// input and output can be piped directly to each other.
+io.in -> io.out;

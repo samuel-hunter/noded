@@ -1,0 +1,136 @@
+/* add.nod
+ * For each line of space-separated integers, add them
+ * together and print the result.
+ */
+
+// Read from user input and convert them into numbers
+processor reader {
+	$chr <- %in;
+
+	if ($chr >= '0' && $chr <= '9') {
+		// Append the digit $chr to the accumulator
+		$acc = $acc * 10 + ($chr - '0');
+		$thereisnum = 1;
+	} else if ($chr == ' ') {
+		if ($thereisnum) {
+			%out <- 0; // op 0 = Next Number
+			%out <- $acc;
+
+			$acc = 0;
+			$thereisnum = 0;
+		}
+	} else if ($chr == '\n') {
+		if ($thereisnum) {
+			$out <- 0; // op 0 = Next Number
+			%out <- $acc;
+
+			$acc = 0;
+			$thereisnum = 0;
+		}
+
+		%out <- 1; // op 1 = Sum them up
+	} else {
+		$out <- 2; // op 2 = User input error
+		halt;
+	}
+}
+
+// Accumulate all numbers and send them off
+processor adder {
+	$status <- %in;
+	switch ($status) {
+	case 0: // op 0 = Next Number
+		$num <- $in;
+		$total += $num;
+		break;
+	case 1: // op 1 = Send the result
+		%out <- $status; // Relay opcode
+		%out <- $total;
+		$total = 0;
+		break;
+	case 2: // op 2 = User input error
+		%out <- $status; // Relay opcode
+		// No need to halt; reading from %in will block forever.
+		break;
+	}
+}
+
+// Delegate whether an error or the result should be printed
+processor handler {
+	$status <- %in;
+	switch ($status) {
+	case 1: // op 1 = Print the result
+		$num <- %in;
+		%print <- $num;
+		break;
+	case 2: // op 2 = User input error
+		%err <- 0; // Send signal to error port
+		break;
+	}
+}
+
+// Relay message to output on trigger.
+processor error {
+	$unused <- %trigger; // Wait for trigger
+	while (1) {
+		%idx <- $i++;
+		$chr <- %in;
+
+		if ($chr == 0)
+			halt;
+
+		%out <- $chr;
+	}
+}
+
+buffer errormsg = "User input error\n";
+
+processor printer {
+	$num <- %in;
+	$started = 0;
+
+	// Numbers range from -128 to 127, making our job a little easier
+
+	// Print sign if necessary
+	if ($num < 0) {
+		%out <- '-';
+		$num *= -1; // Turn $num positive
+	}
+
+	// Print hundreds digit
+	if ($num >= 100) {
+		$chr = ($num / 100) + '0';
+		%out <- $chr;
+
+		$num %= 100;
+		$started = 1;
+	}
+
+	// Print tens digit
+	if ($started || $num >= 10) {
+		$chr = ($num / 10) + '0';
+		%out <- $chr;
+
+		$num %= 10;
+	}
+
+	// Print ones digit and newline
+	$chr = $num + '0';
+	%out <- $chr;
+	%out <- '\n';
+}
+
+
+// Wiring
+io.in -> reader.in;
+reader.out -> adder.in;
+
+adder.out -> handler.in;
+
+handler.err -> error.trigger;
+error.idx -> errormsg.idx;
+errormsg.chr -> error.chr;
+error.out -> err;
+
+handler.print -> printer.in;
+printer.out -> io.out;

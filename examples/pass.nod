@@ -1,0 +1,72 @@
+/* pass.nod
+ * Receive a password and report whether it's correct
+ */
+
+// Match %in against string node %idx and %pass. If they match,
+// send 1 to %status; otherwise, send -1 to %status.
+processor check {
+	%idx <- $idx++;
+	$mem <- %pass;
+
+	// Check if end of password is read
+	if ($mem == 0) {
+		%status <- 1; // Password OK!
+		halt;
+	}
+
+	// Send error and halt if character in password
+	// doesn't match up.
+	$in <- %in;
+	if ($mem != $in) {
+		%status <- -1; // Password mismatch!
+		halt;
+	}
+}
+
+// Split the status into an err and ok signal
+processor split {
+	$status <- %in;
+	if ($status < 0) {
+		%err <- 1;
+	} else {
+		%ok <- 1;
+	}
+}
+
+// Wait for a trigger, report a string and halt.
+processor sendok {
+	$unused <- %trigger; // Block until signal is sent
+	while (1) {
+		%idx <- $count++;
+		$chr <- %msg;
+		if ($chr == 0)
+			halt;
+
+		%out <- $chr;
+	}
+}
+
+// Copy sendok.
+processor senderr = sendok;
+
+buffer password = "Password\n";
+buffer okmsg = "OK!\n";
+buffer errmsg = "Bad password!\n";
+
+
+// Wiring
+
+io.in -> check.in;
+check.idx -> password.idx;
+password.chr -> check.pass;
+check.status -> split.in;
+
+split.ok -> sendok.trigger;
+sendok.idx -> okmsg.idx;
+okmsg.chr -> sendok.msg;
+sendok.out -> io.out;
+
+split.err -> senderr.trigger;
+senderr.idx -> errmsg.idx;
+errmsg.chr -> senderr.msg;
+senderr.out -> io.err;

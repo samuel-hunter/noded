@@ -1,0 +1,20 @@
+/* truth-machine.nod
+ * exit if received 0, but print forever
+ */
+
+processor truth {
+	$status <- %in;
+	if ($status == '0') {
+		halt;
+	}
+
+	while (1) {
+		%out <- $status;
+		%out <- '\n';
+	}
+}
+
+// Wiring
+
+io.in -> truth.in;
+truth.out -> io.out;

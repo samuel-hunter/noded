@@ -1,0 +1,45 @@
+/* hello.nod
+ * Print Hello World and exit.
+ */
+
+// Create a processor node `report`.
+//  Processor nodes execute predefined code ad infinitum
+//  and can only contain four port and four variables.
+
+// Neither ports nor variables need to be declared, because
+//  they can be inferred from the code and the scope is the
+//  entire machine.
+processor report {
+	// Push the value of variable $1 to port %idx.
+	%idx <- $i; // All variables, like $1 start out at zero.
+	$i++;
+
+	// Read from the port %chr and store in the variable $mem.
+	$mem <- %chr;
+	if ($mem == 0)
+		halt; // Stop this node from running forever.
+
+	// Relay the value from %chr to the port %out.
+	%out <- $mem;
+}
+
+// String nodes hold an array of characters initialized at its
+//  start and can be interacted with through its %idx and %chr
+//  ports. Writing to %idx changes where the position it's currently
+//  pointing to, and writing to/reading from the port %chr interacts
+//  with that current character as you would expect.
+buffer message = "Hello, World!\n";
+
+
+// WIRING
+
+// Send messages from the report node's %idx port
+//  to the message node's %idx port.
+report.idx -> message.idx;
+
+// Same thing here.
+message.chr -> report.chr;
+
+// Wire report.out to the special node `io.out`, which sends the number
+//  to standard output as a character.
+report.out -> io.out;
