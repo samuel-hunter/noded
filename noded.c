@@ -9,24 +9,69 @@ void print_usage(const char *prog_name)
 	fprintf(stderr, "Usage: %s [FILE]\n", prog_name);
 }
 
-void interpret(FILE *f, const char filename[])
+// Read all of file f and return an allocated char pointer and set the
+// pointer n to be the buffer's size. The buffer must be `free`d by
+// the caller.
+char *read_all(FILE *f, size_t *n)
 {
-	struct scanner scanner;
+	// Arbitrary number, chosen because it shouldn't reallocate
+	// *too* much.
+	size_t size = 4096;
+	size_t nread = 0;
+	char *result = emalloc(size);
+
+	while (!feof(f) && !ferror(f)) {
+		if (nread == size) {
+			size *= 2;
+			result = erealloc(result, size);
+		}
+		nread += fread(&result[nread], 1, size-nread, f);
+	}
+
+	if (ferror(f)) {
+		free(result);
+		return NULL;
+	}
+
+	result = erealloc(result, nread);
+	*n = nread;
+	return result;
+}
+
+int main(int argc, char **argv)
+{
+	const char *filename;
+	FILE *f;
+
 	char *src;
+	size_t src_size;
+	struct scanner scanner;
 
 	char literal[LITERAL_MAX + 1];
 	struct position pos;
 	enum token tok;
 
-	fseek(f, 0, SEEK_END);
-	size_t fsize = ftell(f);
-	rewind(f);
+	// Choose the file to interpret
+	if (argc > 2) {
+		print_usage(argv[0]);
+		return 1;
+	} else if (argc == 2) {
+		filename = argv[1];
+		f = fopen(filename, "r");
+		if (f == NULL)
+			err(1, "Cannot open %s", filename);
+	} else {
+		filename = "<stdin>";
+		f = stdin;
+	}
 
-	src = emalloc(fsize);
-	fread(src, 1, fsize, f);
-	fclose(f);
 
-	init_scanner(&scanner, filename, src, fsize);
+	src = read_all(f, &src_size);
+	if (src == NULL)
+		errx(1, "%s: I/O Error.", filename);
+
+	// Scan the file token-by-token
+	init_scanner(&scanner, filename, src, src_size);
 	do {
 		tok = scan(&scanner, literal, &pos);
 		if (scanner.has_errored) {
@@ -35,29 +80,13 @@ void interpret(FILE *f, const char filename[])
                                 filename, scanner.err.pos.lineno,
                                 scanner.err.pos.colno,
                                 scanner.err.msg);
-			exit(1);
+			return 1;
 		}
 		printf("%s:%d:%d\ttoken(%s) '%s'\n",
                        filename, pos.lineno, pos.colno,
                        strtoken(tok), literal);
 	} while (tok != TOK_EOF);
-}
 
-int main(int argc, char **argv)
-{
-	const char *filename;
-	FILE *f;
-
-	if (argc != 2) {
-		print_usage(argv[0]);
-		return 1;
-	}
-
-	filename = argv[1];
-	f = fopen(filename, "r");
-	if (f == NULL)
-		err(1, "Cannot open %s", argv[1]);
-
-	interpret(f, filename);
+	free(src);
 	return 0;
 }

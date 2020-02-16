@@ -126,6 +126,7 @@ enum token {
 
 // util.c
 void *emalloc(size_t size);
+void *erealloc(void *ptr, size_t size);
 
 // token.c
 enum token lookup(char ident[]);
