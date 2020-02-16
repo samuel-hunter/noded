@@ -25,6 +25,7 @@ static const char *tokens[] = {
 	"VARIABLE",
 	"PORT",
 	"NUMBER",
+	"CHAR",
 	"STRING_LITERAL",
 	NULL, // literal_end
 
