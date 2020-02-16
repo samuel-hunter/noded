@@ -14,10 +14,22 @@ struct position {
 };
 
 struct noded_error {
+	char msg[ERROR_MAX+1];
 	const char *filename;
 	struct position pos;
+};
 
-	char msg[ERROR_MAX+1];
+struct scanner {
+	const char *filename;
+	char *src;
+	size_t src_len;
+
+	char chr; // Current character
+	size_t offset;     // byte offset
+
+	struct position pos;
+
+        bool has_errored; // Whether an error occurred during scanning
 };
 
 enum token {
@@ -124,6 +136,9 @@ enum token {
 #define HIGHEST_BINARY 13
 #define HIGHEST_PREC   15
 
+// noded.c
+void handle_error(const struct noded_error *err);
+
 // util.c
 void *emalloc(size_t size);
 void *erealloc(void *ptr, size_t size);
@@ -142,20 +157,6 @@ const char *strtoken(enum token tok);
 
 
 // scanner.c
-struct scanner {
-	char *src;
-	size_t src_len;
-
-	char chr; // Current character
-	size_t offset;     // byte offset
-
-	struct position pos;
-
-        bool has_errored; // Whether an error occurred during scanning
-	struct noded_error err;
-};
-
-
 void init_scanner(struct scanner *scanner, const char filename[],
                   char src[], size_t src_len);
 enum token scan(struct scanner *scanner, char *dest_literal, struct position *pos);

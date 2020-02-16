@@ -4,7 +4,15 @@
 
 #include "noded.h"
 
-void print_usage(const char *prog_name)
+void handle_error(const struct noded_error *err)
+{
+	fflush(stdout); // flush stdout so it doesn't mix with stderr.
+	fprintf(stderr, "ERR %s:%d:%d: %s.\n",
+                err->filename, err->pos.lineno,
+                err->pos.colno, err->msg);
+}
+
+static void print_usage(const char *prog_name)
 {
 	fprintf(stderr, "Usage: %s [FILE]\n", prog_name);
 }
@@ -12,7 +20,7 @@ void print_usage(const char *prog_name)
 // Read all of file f and return an allocated char pointer and set the
 // pointer n to be the buffer's size. The buffer must be `free`d by
 // the caller.
-char *read_all(FILE *f, size_t *n)
+static char *read_all(FILE *f, size_t *n)
 {
 	// Arbitrary number, chosen because it shouldn't reallocate
 	// *too* much.
@@ -74,19 +82,11 @@ int main(int argc, char **argv)
 	init_scanner(&scanner, filename, src, src_size);
 	do {
 		tok = scan(&scanner, literal, &pos);
-		if (scanner.has_errored) {
-			fflush(stdout);
-			fprintf(stderr, "%s:%d:%d: %s.\n",
-                                filename, scanner.err.pos.lineno,
-                                scanner.err.pos.colno,
-                                scanner.err.msg);
-			return 1;
-		}
 		printf("%s:%d:%d\ttoken(%s) '%s'\n",
                        filename, pos.lineno, pos.colno,
                        strtoken(tok), literal);
 	} while (tok != TOK_EOF);
 
 	free(src);
-	return 0;
+	return scanner.has_errored ? 1 : 0;
 }

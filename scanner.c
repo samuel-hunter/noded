@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,10 +7,21 @@
 
 #include "noded.h"
 
-static void mark_err(struct scanner *s)
+static void send_err(struct scanner *s, const char *fmt, ...)
 {
-	memcpy(&s->err.pos, &s->pos, sizeof(s->err.pos));
-	s->has_errored = true;
+	struct noded_error err;
+	va_list ap;
+
+	s->has_errored = true; // The scanner has now errored and is dirty.
+
+	err.filename = s->filename;
+	memcpy(&err.pos, &s->pos, sizeof(err.pos));
+
+	va_start(ap, fmt);
+	vsnprintf(err.msg, ERROR_MAX+1, fmt, ap);
+	va_end(ap);
+
+	handle_error(&err);
 }
 
 // Populate the next character in the scanner.
@@ -37,7 +49,7 @@ void init_scanner(struct scanner *scanner, const char filename[],
 	scanner->src_len = src_len;
 	scanner->pos.lineno = 1;
 
-	scanner->err.filename = filename;
+	scanner->filename = filename;
 
 	next(scanner); // populate rune buffer.
 }
@@ -91,8 +103,7 @@ static void scan_identifier(struct scanner *s, char *dest)
 	while (isalnum(s->chr)) {
 		len++;
 		if (len > LITERAL_MAX) {
-			mark_err(s);
-			strncpy(s->err.msg, "Identifier too large", ERROR_MAX);
+			send_err(s, "Identifier too large");
 			goto exit;
 		}
 
@@ -162,8 +173,7 @@ static void scan_number(struct scanner *s, char *dest)
 
 		len++;
 		if (len > LITERAL_MAX) {
-			mark_err(s);
-			strncpy(s->err.msg, "Number literal too large", ERROR_MAX);
+			send_err(s, "Number literal too large");
 			goto exit;
 		}
 
@@ -198,8 +208,7 @@ static void scan_string(struct scanner *s, char *dest)
 
 		len++;
 		if (len > LITERAL_MAX) {
-			mark_err(s);
-			strncpy(s->err.msg, "String literal too large", ERROR_MAX);
+			send_err(s, "String literal too large");
 			return;
 		}
 		*dest++ = s->chr;
@@ -231,8 +240,7 @@ static void scan_char(struct scanner *s, char *dest)
 
 		len++;
 		if (len > LITERAL_MAX) {
-			mark_err(s);
-			strncpy(s->err.msg, "Character literal too large", ERROR_MAX);
+			send_err(s, "Character literal too large");
 			return;
 		}
 		*dest++ = s->chr;
@@ -443,8 +451,7 @@ scan_again:
 	}
 
 	if (tok == ILLEGAL) {
-		mark_err(s);
-		snprintf(s->err.msg, ERROR_MAX, "Illegal token '%s'", dest_literal);
+		send_err(s, "Illegal token '%s'", dest_literal);
 	}
 	memcpy(pos, &s->pos, sizeof(*pos));
 
