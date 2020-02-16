@@ -4,110 +4,101 @@
 
 // Should be in the same exact order as enum tokens.
 static const char *tokens[] = {
-	"ILLEGAL",
-	"EOF",
+	[ILLEGAL] = "ILLEGAL",
+	[TOK_EOF] = "EOF",
 
 	// Grammar
-	"(",
-	")",
-	"{",
-	"}",
+	[LPAREN] = "(",
+	[RPAREN] = ")",
+	[LBRACE] = "{",
+	[RBRACE] = "}",
 
-	":",
-	",",
-	".",
-	";",
-	"->",
+	[COLON] = ":",
+	[COMMA] = ",",
+	[PERIOD] = ".",
+	[SEMICOLON] = ";",
+	[WIRE] = "->",
 
 	// Literals
-	NULL, // literal_beg
-	"IDENTIFIER",
-	"VARIABLE",
-	"PORT",
-	"NUMBER",
-	"CHAR",
-	"STRING_LITERAL",
-	NULL, // literal_end
+	[IDENTIFIER] = "IDENTIFIER",
+	[VARIABLE] = "VARIABLE",
+	[PORT] = "PORT",
+	[NUMBER] = "NUMBER",
+	[CHAR] = "CHAR",
+	[STRING_LITERAL] = "STRING_LITERAL",
 
 	// Operators
-	NULL, // operator_beg
-	"<-",
+	[SEND] = "<-",
 
-	"++",
-	"--",
-	"!",
-	"~",
+	[INC] = "++",
+	[DEC] = "--",
+	[LNOT] = "!",
+	[NOT] = "~",
 
-	"*",
-	"/",
-	"%",
-	"+",
-	"-",
+	[MUL] = "*",
+	[DIV] = "/",
+	[MOD] = "%",
+	[ADD] = "+",
+	[SUB] = "-",
 
-	"<<",
-	">>",
+	[SHL] = "<<",
+	[SHR] = ">>",
 
-	"<",
-	"<=",
-	">",
-	">=",
+	[LSS] = "<",
+	[LTE] = "<=",
+	[GTR] = ">",
+	[GTE] = ">=",
 
-	"==",
-	"!=",
+	[EQL] = "==",
+	[NEQ] = "!=",
 
-	"&",
-	"^",
-	"|",
+	[AND] = "&",
+	[XOR] = "^",
+	[OR] = "|",
 
-	"&&",
-	"||",
+	[LAND] = "&&",
+	[LOR] = "||",
 
-	"?",
+	[COND] = "?",
 
-	"=",
+	[ASSIGN] = "=",
 
-	"*=",
-	"/=",
-	"%=",
+	[MUL_ASSIGN] = "*=",
+	[DIV_ASSIGN] = "/=",
+	[MOD_ASSIGN] = "%=",
 
-	"+=",
-	"-=",
+	[ADD_ASSIGN] = "+=",
+	[SUB_ASSIGN] = "-=",
 
-	"<<=",
-	">>=",
+	[SHL_ASSIGN] = "<<=",
+	[SHR_ASSIGN] = ">>=",
 
-	"&=",
-	"^=",
-	"|=",
-	NULL, // operator_end
+	[AND_ASSIGN] = "&=",
+	[XOR_ASSIGN] = "^=",
+	[OR_ASSIGN] = "|=",
 
-	// Keywords
-	NULL, // keyword_end
-	"break",
-	"case",
-	"continue",
-	"default",
-	"do",
-	"else",
-	"for",
-	"goto",
-	"halt",
-	"if",
-	"switch",
-	"while",
+	[BREAK] = "break",
+	[CASE] = "case",
+	[CONTINUE] = "continue",
+	[DEFAULT] = "default",
+	[DO] = "do",
+	[ELSE] = "else",
+	[FOR] = "for",
+	[GOTO] = "goto",
+	[HALT] = "halt",
+	[IF] = "if",
+	[SWITCH] = "switch",
+	[WHILE] = "while",
 
-	"buffer",
-	"processor",
-	"stack",
-	NULL // keyword_end
+	[BUFFER] = "buffer",
+	[PROCESSOR] = "processor",
+	[STACK] = "stack",
 };
 
-struct keyword_arg {
+struct {
 	const char *literal;
 	enum token tok;
-};
-
-struct keyword_arg keywords[] = {
+} keywords[] = {
 	{"break", BREAK},
 	{"case", CASE},
 	{"continue", CONTINUE},
