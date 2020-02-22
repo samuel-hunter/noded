@@ -4,6 +4,38 @@
 #include "noded.h"
 #include "ast.h"
 
+static const char *exprs[] = {
+	[BAD_EXPR] = "BadExpr",
+	[NUM_LIT_EXPR] = "NumLitExpr",
+	[PAREN_EXPR] = "ParenExpr",
+	[UNARY_EXPR] = "UnaryExpr",
+	[BINARY_EXPR] = "BinaryExpr",
+	[STORE_EXPR] = "StoreExpr"
+};
+
+static const char *stmts[] = {
+	[BAD_STMT] = "BadStmt",
+	[EMPTY_STMT] = "EmptyStmt",
+	[LABELED_STMT] = "LabeledStmt",
+	[EXPR_STMT] = "ExprStmt",
+	[BRANCH_STMT] = "BranchStmt",
+	[BLOCK_STMT] = "BlockStmt",
+	[IF_STMT] = "IfStmt",
+	[CASE_CLAUSE] = "CaseClause",
+	[SWITCH_STMT] = "SwitchStmt",
+	[LOOP_STMT] = "LoopStmt",
+	[HALT_STMT] = "HaltStmt"
+};
+
+static const char *decls[] = {
+	[BAD_DECL] = "BadDecl",
+	[PROC_DECL] = "ProcDecl",
+	[PROC_COPY_DECL] = "ProcCopyDecl",
+	[BUF_DECL] = "BufDecl",
+	[STACK_DECL] = "StackDecl",
+	[WIRE_DECL] = "WireDecl"
+};
+
 struct expr *new_expr(enum expr_type type)
 {
 	struct expr *result = emalloc(sizeof(*result));
@@ -25,171 +57,173 @@ struct decl *new_decl(enum decl_type type)
 	return result;
 }
 
-// Root first walking
-void walk_expr(expr_func func, struct expr *x, int depth, void *dat)
+const char *strexpr(const struct expr *e)
 {
-start:
-	func(x, depth, dat);
-
-	switch (x->type) {
-	case PAREN_EXPR:
-		depth++;
-		x = x->data.paren.x;
-		goto start;
-	case UNARY_EXPR:
-		depth++;
-		x = x->data.unary.x;
-		goto start;
-	case BINARY_EXPR:
-		depth++;
-		walk_expr(func, x->data.binary.x, depth, dat);
-		x = x->data.binary.y;
-		goto start;
-	default:
-		break; // Do nothing
-	}
+	return exprs[e->type];
 }
 
-void walk_stmt(stmt_func func, struct stmt *x, int depth, void *dat)
+const char *strstmt(const struct stmt *s)
 {
-start:
-	func(x, depth, dat);
-
-	switch (x->type) {
-	case LABELED_STMT:
-		depth++;
-		x = x->data.labeled.stmt;
-		goto start;
-	case BLOCK_STMT:
-		depth++;
-		for (size_t i = 0; i < x->data.block.nstmts; i++) {
-			walk_stmt(func, x->data.block.stmt_list[i],
-			          depth, dat);
-		}
-		break;
-	case IF_STMT:
-		depth++;
-		walk_stmt(func, x->data.if_stmt.body, depth, dat);
-		x = x->data.if_stmt.otherwise;
-		goto start;
-	case SWITCH_STMT:
-		depth++;
-		x = x->data.switch_stmt.body;
-		goto start;
-	case LOOP_STMT:
-		depth++;
-		walk_stmt(func, x->data.loop.init, depth, dat);
-		walk_stmt(func, x->data.loop.post, depth, dat);
-		x = x->data.loop.body;
-		goto start;
-	default:
-		break; // Do nothing
-	}
+	return stmts[s->type];
 }
 
-void walk_expr2(expr_func func, struct expr *x, int depth, void *dat)
+const char *strdecl(const struct decl *d)
 {
-	switch (x->type) {
+	return decls[d->type];
+}
+
+static void walk_expr_(expr_func func, struct expr *e, void *dat, int depth,
+                       enum call_order order)
+{
+
+	if (order == PARENT_FIRST)
+		func(e, dat, depth);
+
+	// Walk through the children...
+	switch (e->type) {
 	case PAREN_EXPR:
-		walk_expr2(func, x->data.paren.x, depth+1, dat);
+		walk_expr_(func, e->data.paren.x, dat, depth+1, order);
 		break;
 	case UNARY_EXPR:
-		walk_expr2(func, x->data.unary.x, depth+1, dat);
+		walk_expr_(func, e->data.unary.x, dat, depth+1, order);
 		break;
 	case BINARY_EXPR:
-		walk_expr2(func, x->data.binary.x, depth+1, dat);
-		walk_expr2(func, x->data.binary.y, depth+1, dat);
+		walk_expr_(func, e->data.binary.x, dat, depth+1, order);
+		walk_expr_(func, e->data.binary.y, dat, depth+1, order);
 		break;
 	default:
-		break; // Do nothing
+		break; // No children here
 	}
 
-	func(x, depth, dat);
+	if (order == CHILD_FIRST)
+		func(e, dat, depth);
 }
 
-void walk_stmt2(stmt_func func, struct stmt *x, int depth, void *dat)
+static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
+                      void *dat, int depth, enum call_order order)
 {
-	switch (x->type) {
+
+	if (order == PARENT_FIRST)
+		sfunc(s, dat, depth);
+
+	// Walk through the children...
+	switch (s->type) {
 	case LABELED_STMT:
-		walk_stmt2(func, x->data.labeled.stmt, depth, dat);
+		walk_stmt_(sfunc, efunc, s->data.labeled.stmt,
+		           dat, depth+1, order);
 		break;
-	case BLOCK_STMT:
-		for (size_t i = 0; i < x->data.block.nstmts; i++) {
-			walk_stmt2(func, x->data.block.stmt_list[i],
-			           depth, dat);
-		}
-		break;
-	case IF_STMT:
-		walk_stmt2(func, x->data.if_stmt.body, depth, dat);
-		walk_stmt2(func, x->data.if_stmt.otherwise, depth, dat);
-		break;
-	case SWITCH_STMT:
-		walk_stmt2(func, x->data.switch_stmt.body, depth, dat);
-		break;
-	case LOOP_STMT:
-		walk_stmt2(func, x->data.loop.init, depth, dat);
-		walk_stmt2(func, x->data.loop.post, depth, dat);
-		walk_stmt2(func, x->data.loop.body, depth, dat);
-		break;
-	default:
-		break; // Do nothng
-	}
-
-	func(x, depth, dat);
-}
-
-static void free_expr_helper(struct expr *x, int depth, void *dat)
-{
-	(void)dat;
-	(void)depth;
-
-	free(x);
-}
-
-static void free_stmt_helper(struct stmt *x, int depth, void *dat)
-{
-	(void)dat;
-	(void)depth;
-
-	switch (x->type) {
 	case EXPR_STMT:
-		walk_expr2(&free_expr_helper, x->data.expr.x, 0, NULL);
+		if (efunc) {
+			walk_expr_(efunc, s->data.expr.x, dat, depth+1, order);
+		}
+		break;
+	case BLOCK_STMT:
+		for (size_t i = 0; i < s->data.block.nstmts; i++) {
+			walk_stmt_(sfunc, efunc, s->data.block.stmt_list[i],
+			           dat, depth+1, order);
+		}
 		break;
 	case IF_STMT:
-		walk_expr2(&free_expr_helper,
-		           x->data.if_stmt.cond, 0, NULL);
+		if (efunc) {
+			walk_expr_(efunc, s->data.if_stmt.cond,
+			           dat, depth+1, order);
+		}
+		walk_stmt_(sfunc, efunc, s->data.if_stmt.body,
+		           dat, depth+1, order);
+		walk_stmt_(sfunc, efunc, s->data.if_stmt.otherwise,
+		           dat, depth+1, order);
 		break;
 	case SWITCH_STMT:
-		walk_expr2(&free_expr_helper,
-		           x->data.switch_stmt.tag, 0, NULL);
+		if (efunc) {
+			walk_expr_(efunc, s->data.switch_stmt.tag,
+			           dat, depth+1, order);
+		}
+		walk_stmt_(sfunc, efunc, s->data.switch_stmt.body,
+		           dat, depth+1, order);
 		break;
 	case LOOP_STMT:
-		walk_expr2(&free_expr_helper,
-		           x->data.loop.cond, 0, NULL);
+		walk_stmt_(sfunc, efunc, s->data.loop.init,
+		           dat, depth+1, order);
+		if (efunc) {
+			walk_expr_(efunc, s->data.loop.cond,
+			           dat, depth+1, order);
+		}
+		walk_stmt_(sfunc, efunc, s->data.loop.post, dat, depth+1, order);
+		walk_stmt_(sfunc, efunc, s->data.loop.body, dat, depth+1, order);
 		break;
 	default:
-		break; // Do nothing
+		break; // No children here...
 	}
 
-	free(x);
+	if (order == CHILD_FIRST)
+		sfunc(s, dat, depth);
 }
 
-void free_expr(struct expr *x)
+void walk_expr(expr_func func, struct expr *e, void *dat,
+               enum call_order order)
 {
-	walk_expr2(&free_expr_helper, x, 0, NULL);
+	walk_expr_(func, e, dat, 0, order);
 }
 
-void free_stmt(struct stmt *x)
+void walk_stmt(stmt_func sfunc, expr_func efunc,
+               struct stmt *s, void *dat, enum call_order order)
 {
-	walk_stmt2(&free_stmt_helper, x, 0, NULL);
+	walk_stmt_(sfunc, efunc, s, dat, 0, order);
 }
 
-void free_decl(struct decl *x)
+void walk_decl(decl_func dfunc, stmt_func sfunc, expr_func efunc,
+               struct decl *d, void *dat, enum call_order order)
 {
-	if (x->type == PROC_DECL) {
-		walk_stmt2(&free_stmt_helper, x->data.proc.body,
-		           0, NULL);
+	if (order == PARENT_FIRST) {
+		dfunc(d, dat);
 	}
 
-	free(x);
+	// Walk through the children...
+	if (d->type == PROC_DECL) {
+		walk_stmt_(sfunc, efunc, d->data.proc.body, dat, 1, order);
+	}
+
+	if (order == CHILD_FIRST) {
+		dfunc(d, dat);
+	}
+}
+
+static void free_expr_helper(struct expr *e, void *dat, int depth)
+{
+	(void)dat;
+	(void)depth;
+
+	free(e);
+}
+
+static void free_stmt_helper(struct stmt *s, void *dat, int depth)
+{
+	(void)dat;
+	(void)depth;
+
+	free(s);
+}
+
+static void free_decl_helper(struct decl *d, void *dat)
+{
+	(void)dat;
+
+	free(d);
+}
+
+void free_expr(struct expr *e)
+{
+	walk_expr(&free_expr_helper, e, NULL, CHILD_FIRST);
+}
+
+void free_stmt(struct stmt *s)
+{
+	walk_stmt(&free_stmt_helper, &free_expr_helper,
+                  s, NULL, CHILD_FIRST);
+}
+
+void free_decl(struct decl *d)
+{
+	walk_decl(&free_decl_helper, &free_stmt_helper, &free_expr_helper,
+                  d, NULL, CHILD_FIRST);
 }

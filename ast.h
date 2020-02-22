@@ -193,20 +193,29 @@ struct expr *new_expr(enum expr_type type);
 struct stmt *new_stmt(enum stmt_type type);
 struct decl *new_decl(enum decl_type type);
 
-typedef void (*expr_func)(struct expr *, int depth, void *);
-typedef void (*stmt_func)(struct stmt *, int depth, void *);
+const char *strexpr(const struct expr *e);
+const char *strstmt(const struct stmt *s);
+const char *strdecl(const struct decl *d);
 
-// Handle higher nodes before deeper nodes.
-void walk_expr(expr_func func, struct expr *x, int depth, void *dat);
-void walk_stmt(stmt_func func, struct stmt *x, int depth, void *dat);
+typedef void (*expr_func)(struct expr *, void *, int depth);
+typedef void (*stmt_func)(struct stmt *, void *, int depth);
+typedef void (*decl_func)(struct decl *, void *);
 
-// Handle deeper ndoes before higher nodes.
-void walk_expr2(expr_func func, struct expr *x, int depth, void *dat);
-void walk_stmt2(stmt_func func, struct stmt *x, int depth, void *dat);
+enum call_order {
+	PARENT_FIRST, // Handle parent nodes before child nodes
+	CHILD_FIRST    // Vice versa
+};
+
+void walk_expr(expr_func func, struct expr *e, void *dat,
+               enum call_order order);
+void walk_stmt(stmt_func sfunc, expr_func efunc,
+               struct stmt *s, void *dat, enum call_order order);
+void walk_decl(decl_func dfunc, stmt_func sfunc, expr_func efunc,
+               struct decl *d, void *dat, enum call_order order);
 
 // Frees the node and all of its children.
-void free_expr(struct expr *x);
-void free_stmt(struct stmt *x);
-void free_decl(struct decl *x);
+void free_expr(struct expr *e);
+void free_stmt(struct stmt *s);
+void free_decl(struct decl *d);
 
 #endif /* AST_H */

@@ -55,80 +55,58 @@ static void indent(int depth)
 	}
 }
 
-static void print_expr(struct expr *x, int depth, void *dat)
+static void print_expr(struct expr *e, void *dat, int depth)
 {
 	(void)dat;
 
 	indent(depth);
-	switch (x->type) {
-	case BAD_EXPR:
-		printf("BadExpr\n");
-		break;
+	switch (e->type) {
 	case NUM_LIT_EXPR:
-		printf("NumLitExpr %d\n", x->data.num_lit.value);
-		break;
-	case PAREN_EXPR:
-		printf("ParenExpr\n");
+		printf("%s %d\n", strexpr(e), e->data.num_lit.value);
 		break;
 	case UNARY_EXPR:
-		printf("UnaryExpr (%s) (suffix=%d)\n",
-		       strtoken(x->data.unary.op), x->data.unary.is_suffix);
+		printf("%s (%s) (suffix=%d)\n", strexpr(e),
+		       strtoken(e->data.unary.op), e->data.unary.is_suffix);
 		break;
 	case BINARY_EXPR:
-		printf("BinaryExpr (%s)\n", strtoken(x->data.binary.op));
+		printf("%s (%s)\n", strexpr(e), strtoken(e->data.binary.op));
 		break;
 	case STORE_EXPR:
-		printf("Store (%s, %s)\n",
-		       strtoken(x->data.store.kind), x->data.store.name);
+		printf("%s (%s, %s)\n", strexpr(e),
+		       strtoken(e->data.store.kind), e->data.store.name);
 		break;
+	default:
+		puts(strexpr(e));
 	}
 }
 
-static void print_stmt(struct stmt *x, int depth, void *dat)
+static void print_stmt(struct stmt *s, void *dat, int depth)
 {
 	(void)dat;
 
 	indent(depth);
-	switch (x->type) {
-	case BAD_STMT:
-		printf("BadStmt\n");
-		break;
-	case EMPTY_STMT:
-		printf("EmptyStmt\n");
-		break;
+	switch (s->type) {
 	case LABELED_STMT:
-		printf("LabeledStmt: %s\n", x->data.labeled.label);
-		break;
-	case EXPR_STMT:
-		printf("ExprStmt\n");
-		walk_expr(&print_expr, x->data.expr.x, depth+1, NULL);
+		printf("%s %s\n", strstmt(s), s->data.labeled.label);
 		break;
 	case BRANCH_STMT:
-		printf("BranchStmt %s %s\n",
-		       strtoken(x->data.branch.tok), x->data.branch.label);
-		break;
-	case BLOCK_STMT:
-		printf("BlockStmt\n");
-		break;
-	case IF_STMT:
-		printf("IfStmt\n");
-		walk_expr(&print_expr, x->data.if_stmt.cond, depth+1, NULL);
+		printf("%s %s %s\n", strstmt(s),
+		       strtoken(s->data.branch.tok), s->data.branch.label);
 		break;
 	case CASE_CLAUSE:
-		printf("CaseClause %d (default=%d)\n",
-		x->data.case_clause.is_default, x->data.case_clause.x);
-		break;
-	case SWITCH_STMT:
-		printf("SwitchStmt\n");
-		walk_expr(&print_expr, x->data.switch_stmt.tag, depth+1, NULL);
+		printf("%s ", strstmt(s));
+		if (s->data.case_clause.is_default) {
+			printf("default\n");
+		} else {
+			printf("case %d\n", s->data.case_clause.x);
+		}
 		break;
 	case LOOP_STMT:
-		printf("LoopStmt (do=%d)\n", x->data.loop.exec_body_first);
-		walk_expr(&print_expr, x->data.loop.cond, depth+1, NULL);
+		printf("%s (do=%s)\n", strstmt(s),
+		       s->data.loop.exec_body_first ? "yes" : "no");
 		break;
-	case HALT_STMT:
-		printf("HaltStmt\n");
-		break;
+	default:
+		puts(strstmt(s));
 	}
 }
 
@@ -150,76 +128,53 @@ static void print_array(uint8_t data[], size_t len)
 	printf("}\n");
 }
 
-static void print_decl(struct decl *decl)
+static void print_decl(struct decl *d, void *dat)
 {
-	switch (decl->type) {
-	case BAD_DECL:
-		printf("BadDecl\n");
-		break;
+	(void)dat;
+
+	switch (d->type) {
 	case PROC_DECL:
-		printf("ProcDecl %s\n", decl->data.proc.name);
-		walk_stmt(&print_stmt, decl->data.proc.body, 1, NULL);
+		printf("%s %s\n", strdecl(d), d->data.proc.name);
 		break;
 	case PROC_COPY_DECL:
-		printf("ProcCopyDecl %s = %s\n", decl->data.proc_copy.name,
-		       decl->data.proc_copy.source);
+		printf("%s %s = %s\n", strdecl(d), d->data.proc_copy.name,
+		       d->data.proc_copy.source);
 		break;
 	case BUF_DECL:
-		printf("BufNodeDecl %s\n\t", decl->data.buf.name);
-		print_array(decl->data.buf.data, decl->data.buf.len);
+		printf("%s %s =\n\t", strdecl(d), d->data.buf.name);
+		print_array(d->data.buf.data, d->data.buf.len);
 		break;
 	case STACK_DECL:
-		printf("StackNodeDecl %s\n", decl->data.stack.name);
+		printf("%s %s\n", strdecl(d), d->data.stack.name);
 		break;
 	case WIRE_DECL:
-		printf("WireDecl %s.%s -> %s.%s\n",
-		       decl->data.wire.source.node_name, decl->data.wire.source.name,
-		       decl->data.wire.dest.node_name, decl->data.wire.dest.name);
-		break;
-	}
-}
-
-static void count_expr_size(struct expr *x, int depth, void *dat)
-{
-	(void)depth;
-	size_t *counted = (size_t*)dat;
-	*counted += sizeof(*x);
-}
-
-static void count_stmt_size(struct stmt *x, int depth, void *dat)
-{
-	(void)depth;
-	size_t *counted = (size_t*)dat;
-	*counted += sizeof(*x);
-
-	switch (x->type) {
-	case EXPR_STMT:
-		walk_expr(&count_expr_size, x->data.expr.x, 0, dat);
-		break;
-	case IF_STMT:
-		walk_expr(&count_expr_size, x->data.if_stmt.cond, 0, dat);
-		break;
-	case SWITCH_STMT:
-		walk_expr(&count_expr_size, x->data.switch_stmt.tag, 0, dat);
-		break;
-	case LOOP_STMT:
-		walk_expr(&count_expr_size, x->data.loop.cond, 0, dat);
+		printf("%s %s.%s -> %s.%s\n", strdecl(d),
+		       d->data.wire.source.node_name, d->data.wire.source.name,
+		       d->data.wire.dest.node_name, d->data.wire.dest.name);
 		break;
 	default:
-		break; // No expr's here.
+		puts(strdecl(d));
 	}
 }
 
-static size_t count_decl_size(struct decl *x)
+static void count_expr_size(struct expr *e, void *dat, int depth)
 {
-	size_t counted = sizeof(*x);
+	(void)depth;
+	size_t *counted = (size_t*)dat;
+	*counted += sizeof(*e);
+}
 
-	if (x->type == PROC_DECL) {
-		walk_stmt(&count_stmt_size, x->data.proc.body,
-		          0, &counted);
-	}
+static void count_stmt_size(struct stmt *s, void *dat, int depth)
+{
+	(void)depth;
+	size_t *counted = (size_t*)dat;
+	*counted += sizeof(*s);
+}
 
-	return counted;
+static void count_decl_size(struct decl *d, void *dat)
+{
+	size_t *counted = (size_t*)dat;
+	*counted += sizeof(*d);
 }
 
 int main(int argc, char **argv)
@@ -263,8 +218,10 @@ int main(int argc, char **argv)
 		struct decl *decl = parse_decl(&parser);
 		if (parser.errors) return 1;
 
-		print_decl(decl);
-		tree_size += count_decl_size(decl);
+		walk_decl(&print_decl, &print_stmt, &print_expr,
+		          decl, NULL, PARENT_FIRST);
+		walk_decl(&count_decl_size, &count_stmt_size, &count_expr_size,
+		          decl, &tree_size, PARENT_FIRST);
 		free_decl(decl);
 	}
 
