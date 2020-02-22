@@ -243,22 +243,22 @@ uint8_t parse_char(struct parser *p)
 	if (literal.tok != CHAR) {
 		// No use parsing a non-char.
 		return 0;
-	} else if (len == 2) {
-		send_error(p, "Empty character");
-		return 0;
-	} else if (len == 3) {
-		return literal.lit[1];
-	} else if (literal.lit[1] == '\\') {
-		val = parse_escape(p, &literal.lit[1], &advance, &ok);
+	} else if (literal.lit[0] == '\\') {
+		val = parse_escape(p, &literal.lit[0], &advance, &ok);
 		if (!ok)
 			return 0;
 
-		if ((size_t) advance+2 < len) {
+		if ((size_t) advance < len) {
 			send_error(p, "Character literal %s too long", literal.lit);
 			return 0;
 		}
 
 		return val;
+	} else if (len == 0) {
+		send_error(p, "Empty character");
+		return 0;
+	} else if (len == 1) {
+		return literal.lit[1];
 	} else {
 		send_error(p, "Character literal %s too long", literal.lit);
 		return 0;

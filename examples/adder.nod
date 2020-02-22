@@ -130,7 +130,7 @@ adder.out -> handler.in;
 handler.err -> error.trigger;
 error.idx -> errormsg.idx;
 errormsg.chr -> error.chr;
-error.out -> err;
+error.out -> io.err;
 
 handler.print -> printer.in;
 printer.out -> io.out;
