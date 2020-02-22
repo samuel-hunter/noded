@@ -833,7 +833,9 @@ static struct decl *parse_proc_node_decl(struct parser *p)
 		result->data.proc.body = parse_block_stmt(p);
 		return result;
 	case ASSIGN:
+		expect(p, ASSIGN, NULL);
 		expect(p, IDENTIFIER, &source);
+		expect(p, SEMICOLON, NULL);
 
 		result = new_decl(PROC_COPY_DECL);
 		result->data.proc_copy.start = keyword.pos;
