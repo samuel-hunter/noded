@@ -1,35 +1,18 @@
 #ifndef NODED_H
 #define NODED_H
 
-#include <stdbool.h>
+#include <stdbool.h> /* bool */
+#include <stddef.h> /* size_t */
+
+// Precedence-based binary operator scanning.
+#define NON_OPERATOR   -1
+#define LOWEST_PREC     0
+#define HIGHEST_BINARY 13
+#define HIGHEST_PREC   15
 
 enum limits {
 	LITERAL_MAX = 4096, // Max byte size for a literal.
 	ERROR_MAX = 512  // Max byte size for an error message.
-};
-
-struct position {
-	int lineno; // 1-based
-	int colno; // 0-based
-};
-
-struct noded_error {
-	char msg[ERROR_MAX+1];
-	const char *filename;
-	struct position pos;
-};
-
-struct scanner {
-	const char *filename;
-	char *src;
-	size_t src_len;
-
-	char chr; // Current character
-	size_t offset;     // byte offset
-
-	struct position pos;
-
-        bool has_errored; // Whether an error occurred during scanning
 };
 
 enum token {
@@ -130,11 +113,43 @@ enum token {
 	keyword_end
 };
 
-// Precedence-based binary operator scanning.
-#define NON_OPERATOR   -1
-#define LOWEST_PREC     0
-#define HIGHEST_BINARY 13
-#define HIGHEST_PREC   15
+struct position {
+	int lineno; // 1-based
+	int colno; // 0-based
+};
+
+struct fulltoken {
+	enum token tok;
+	char lit[LITERAL_MAX+1];
+	struct position pos;
+};
+
+struct noded_error {
+	char msg[ERROR_MAX+1];
+	const char *filename;
+	struct position pos;
+};
+
+struct scanner {
+	const char *filename;
+	char *src;
+	size_t src_len;
+
+	char chr; // Current character
+	size_t offset;     // byte offset
+
+	struct position pos;
+
+        bool has_errored; // Whether an error occurred during scanning
+};
+
+struct parser {
+	struct scanner *scanner;
+	size_t errors;
+
+	// Look one token ahead
+	struct fulltoken current;
+};
 
 // noded.c
 void handle_error(const struct noded_error *err);
@@ -159,6 +174,11 @@ const char *strtoken(enum token tok);
 // scanner.c
 void init_scanner(struct scanner *scanner, const char filename[],
                   char src[], size_t src_len);
-enum token scan(struct scanner *scanner, char *dest_literal, struct position *pos);
+void scan(struct scanner *scanner, struct fulltoken *dest);
+
+// parser.c
+void init_parser(struct parser *parser, struct scanner *scanner);
+bool parser_eof(const struct parser *parser);
+struct decl *parse_decl(struct parser *parser);
 
 #endif /* NODED_H */

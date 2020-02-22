@@ -298,18 +298,17 @@ static enum token switch4(struct scanner *s, enum token tok0, enum token tok1,
 // the literal string, and to pos the token position. Assumes
 // dest_literal has a capacity of LITERAL_MAX+1 bytes. A literal
 // greater than LITERAL_MAX will mark an error in the scanner.
-enum token scan(struct scanner *s, char *dest_literal, struct position *pos) {
+void scan(struct scanner *s, struct fulltoken *dest) {
 	enum token tok = ILLEGAL;
-
 	// By default, set the literal empty.
-	dest_literal[0] = '\0';
+	dest->lit[0] = '\0';
 scan_again:
 	skip_space(s);
 	if (isalpha(s->chr)) {
-		scan_identifier(s, dest_literal);
-		tok = lookup(dest_literal);
+		scan_identifier(s, dest->lit);
+		tok = lookup(dest->lit);
 	} else if (isdigit(s->chr)) {
-		scan_number(s, dest_literal);
+		scan_number(s, dest->lit);
 		tok = NUMBER;
 	} else {
 		// The order of the keys in this switch should roughly
@@ -350,7 +349,7 @@ scan_again:
 			break;
 		case '$':
 			next(s); // consume $
-			scan_identifier(s, dest_literal);
+			scan_identifier(s, dest->lit);
 			tok = VARIABLE;
 			break;
 		case '%':
@@ -359,18 +358,18 @@ scan_again:
 				tok = PORT;
 				// The '%' will be truncated in the
 				// literal value.
-				scan_identifier(s, dest_literal);
+				scan_identifier(s, dest->lit);
 			} else {
 				tok = switch2(s, MOD, MOD_ASSIGN);
 			}
 			break;
 		case '\'':
 			tok = CHAR;
-			scan_char(s, dest_literal);
+			scan_char(s, dest->lit);
 			break;
 		case '"':
 			tok = STRING_LITERAL;
-			scan_string(s, dest_literal);
+			scan_string(s, dest->lit);
 			break;
 		case '+':
 			next(s);
@@ -444,16 +443,16 @@ scan_again:
 			break;
 		default:
 			tok = ILLEGAL;
-			dest_literal[0] = s->chr;
-			dest_literal[1] = '\0';
+			dest->lit[0] = s->chr;
+			dest->lit[1] = '\0';
 			next(s); // Always advance.
 		}
 	}
 
 	if (tok == ILLEGAL) {
-		send_err(s, "Illegal token '%s'", dest_literal);
+		send_err(s, "Illegal token '%s'", dest->lit);
 	}
-	memcpy(pos, &s->pos, sizeof(*pos));
 
-	return tok;
+	memcpy(&dest->pos, &s->pos, sizeof(dest->pos));
+	dest->tok = tok;
 }
