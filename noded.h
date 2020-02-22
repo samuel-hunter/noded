@@ -140,7 +140,7 @@ struct scanner {
 
 	struct position pos;
 
-        bool has_errored; // Whether an error occurred during scanning
+	bool has_errored; // Whether an error occurred during scanning
 };
 
 struct parser {

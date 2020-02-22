@@ -91,7 +91,7 @@ static void expect(struct parser *p, enum token expected, struct fulltoken *dest
 
 	if (p->current.tok != expected) {
 		send_error(p, "Expected %s, but found %s",
-                         strtoken(expected), strtoken(p->current.tok));
+		         strtoken(expected), strtoken(p->current.tok));
 	} else {
 		next(p);
 	}
@@ -206,7 +206,7 @@ static uint8_t parse_number(struct parser *p)
 
 	// Handle standard strtol errors.
 	if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN)) ||
-            (errno != 0 && val == 0)) {
+	    (errno != 0 && val == 0)) {
 		send_error(p, "Invalid or out-of-range value %s");
 		return 0;
 	}
@@ -214,7 +214,7 @@ static uint8_t parse_number(struct parser *p)
 	// Handle noded-specific range errors.
 	if (val < INT8_MIN || val > UINT8_MAX) {
 		send_error(p, "Value %s out of range [%d, %d]",
-                           INT8_MIN, UINT8_MAX);
+		                   INT8_MIN, UINT8_MAX);
 	}
 
 	// Wrap the number where appropriate.
@@ -274,7 +274,7 @@ uint8_t parse_constant(struct parser *p)
 		return parse_char(p);
 	default:
 		send_error(p, "Expected number constant, but received %s",
-                           strtoken(p->current.tok));
+		           strtoken(p->current.tok));
 		return 0;
 	}
 }
@@ -347,7 +347,7 @@ void parse_array(struct parser *p, uint8_t dest[], size_t *len)
 			break;
 		default:
 			send_error(p, "Expected , or }, but found %s",
-                                   strtoken(p->current.tok));
+			           strtoken(p->current.tok));
 			next(p); // Always progress.
 		}
 	}
@@ -442,7 +442,7 @@ static struct expr *parse_primary_expr(struct parser *p)
 		return result;
 	default:
 		send_error(p, "Expected number, char, or (, but found %s",
-                         strtoken(p->current.tok));
+		         strtoken(p->current.tok));
 		result = new_expr(BAD_EXPR);
 		result->data.bad.start = p->current.pos;
 		next(p); // Always advance
@@ -573,7 +573,7 @@ static struct stmt *parse_branch_stmt(struct parser *p)
 		return result;
 	default:
 		send_error(p, "Expected break, continue, or goto, but found %s",
-                         strtoken(keyword.tok));
+		         strtoken(keyword.tok));
 
 		result = new_stmt(BAD_STMT);
 		result->data.bad.start = keyword.pos;
@@ -658,7 +658,7 @@ static struct stmt *parse_case_clause(struct parser *p)
 		return result;
 	default:
 		send_error(p, "Expected case or default, but found %s",
-                           strtoken(p->current.tok));
+		           strtoken(p->current.tok));
 		next(p); // Always progress
 		return result;
 	}
@@ -797,7 +797,7 @@ static struct stmt *parse_stmt(struct parser *p)
 			return parse_expr_stmt(p);
 		} else {
 			send_error(p, "Expected start of statement, found %s",
-                                   strtoken(p->current.tok));
+			           strtoken(p->current.tok));
 
 			result = new_stmt(BAD_STMT);
 			result->data.bad.start = p->current.pos;
@@ -844,7 +844,7 @@ static struct decl *parse_proc_node_decl(struct parser *p)
 		return result;
 	default:
 		send_error(p, "Expected { or =, but found %s",
-                         strtoken(p->current.tok));
+		         strtoken(p->current.tok));
 		next(p); // Always progress
 
 		result = new_decl(BAD_DECL);
@@ -878,7 +878,7 @@ static struct decl *parse_buf_node_decl(struct parser *p)
 		break;
 	default:
 		send_error(p, "Expected string literal or {, but found %s",
-                           strtoken(p->current.tok));
+		           strtoken(p->current.tok));
 	}
 
 	expect(p, SEMICOLON, NULL); // ;
@@ -928,8 +928,9 @@ struct decl *parse_decl(struct parser *parser)
 	case IDENTIFIER:
 		return parse_wire_decl(parser);
 	default:
-		send_error(parser, "Expected processor, buffer, or wire declaration, but found %s",
-                         strtoken(parser->current.tok));
+		send_error(parser, "Expected processor, buffer, or "
+		           "wire declaration, but found %s",
+		           strtoken(parser->current.tok));
 		next(parser); // Always progress.
 
 		result = new_decl(BAD_DECL);
