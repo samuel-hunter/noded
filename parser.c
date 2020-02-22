@@ -258,7 +258,7 @@ uint8_t parse_char(struct parser *p)
 		send_error(p, "Empty character");
 		return 0;
 	} else if (len == 1) {
-		return literal.lit[1];
+		return literal.lit[0];
 	} else {
 		send_error(p, "Character literal %s too long", literal.lit);
 		return 0;
