@@ -20,7 +20,7 @@ static void print_usage(const char *prog_name)
 }
 
 // Read all of file f and return an allocated char pointer and set the
-// pointer n to be the buffer's size. The buffer must be `free`d by
+// pointer n to be the buffer's size. The buffer must be freed by
 // the caller.
 static char *read_all(FILE *f, size_t *n)
 {
@@ -38,13 +38,13 @@ static char *read_all(FILE *f, size_t *n)
 		nread += fread(&result[nread], 1, size-nread, f);
 	}
 
-	if (ferror(f)) {
+	*n = nread;
+	if (ferror(f) || nread == 0) {
 		free(result);
 		return NULL;
 	}
 
 	result = erealloc(result, nread);
-	*n = nread;
 	return result;
 }
 
@@ -110,11 +110,15 @@ static void print_stmt(struct stmt *s, void *dat, int depth)
 	}
 }
 
+
 static void print_array(uint8_t data[], size_t len)
 {
 	printf("{");
 	for (size_t i = 0; i < len; i++) {
 		char c = data[i];
+
+		// Try to show the printable character, but fall back
+		// to a hex value.
 		if (isgraph(c) || c == ' ') {
 			printf("'%c'", c);
 		} else {
@@ -205,8 +209,13 @@ int main(int argc, char **argv)
 	       sizeof(struct expr), sizeof(struct stmt), sizeof(struct decl));
 
 	src = read_all(f, &src_size);
-	if (src == NULL)
-		errx(1, "%s: I/O Error.", filename);
+	if (src == NULL) {
+		if (ferror(f)) {
+			errx(1, "%s: I/O Error.", filename);
+		} else {
+			fprintf(stderr, "WARN %s: Zero size file.\n", filename);
+		}
+	}
 
 	// Scan the file token-by-token
 	init_scanner(&scanner, filename, src, src_size);
