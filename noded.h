@@ -1,8 +1,9 @@
 #ifndef NODED_H
 #define NODED_H
 
-#include <stdbool.h> /* bool */
-#include <stddef.h> /* size_t */
+#include <stdbool.h> // bool
+#include <stddef.h> // size_t
+#include <stdint.h> // UINT8_MAX
 
 // Precedence-based binary operator scanning.
 #define NON_OPERATOR   -1
@@ -10,8 +11,12 @@
 #define HIGHEST_BINARY 13
 #define HIGHEST_PREC   15
 
+// Note: LITERAL_MAX is calculated by multiplying the buffer size with
+// the longest escape sequence for a string (\x##, or \###). This is
+// the longest literal size that any program would reasonably need.
 enum limits {
-	LITERAL_MAX = 4096, // Max byte size for a literal.
+	BUFFER_NODE_MAX = UINT8_MAX+1,
+	LITERAL_MAX = BUFFER_NODE_MAX*4, // Max byte size for a literal.
 	ERROR_MAX = 512  // Max byte size for an error message.
 };
 

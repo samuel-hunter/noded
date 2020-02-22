@@ -179,6 +179,49 @@ static void print_decl(struct decl *decl)
 	}
 }
 
+static void count_expr_size(struct expr *x, int depth, void *dat)
+{
+	(void)depth;
+	size_t *counted = (size_t*)dat;
+	*counted += sizeof(*x);
+}
+
+static void count_stmt_size(struct stmt *x, int depth, void *dat)
+{
+	(void)depth;
+	size_t *counted = (size_t*)dat;
+	*counted += sizeof(*x);
+
+	switch (x->type) {
+	case EXPR_STMT:
+		walk_expr(&count_expr_size, x->data.expr.x, 0, dat);
+		break;
+	case IF_STMT:
+		walk_expr(&count_expr_size, x->data.if_stmt.cond, 0, dat);
+		break;
+	case SWITCH_STMT:
+		walk_expr(&count_expr_size, x->data.switch_stmt.tag, 0, dat);
+		break;
+	case LOOP_STMT:
+		walk_expr(&count_expr_size, x->data.loop.cond, 0, dat);
+		break;
+	default:
+		break; // No expr's here.
+	}
+}
+
+static size_t count_decl_size(struct decl *x)
+{
+	size_t counted = sizeof(*x);
+
+	if (x->type == PROC_DECL) {
+		walk_stmt(&count_stmt_size, x->data.proc.body,
+		          0, &counted);
+	}
+
+	return counted;
+}
+
 int main(int argc, char **argv)
 {
 	const char *filename;
@@ -203,6 +246,9 @@ int main(int argc, char **argv)
 		f = stdin;
 	}
 
+	printf("Expr size: %lu\nStmt size: %lu\nDecl size: %lu\n",
+	       sizeof(struct expr), sizeof(struct stmt), sizeof(struct decl));
+
 	src = read_all(f, &src_size);
 	if (src == NULL)
 		errx(1, "%s: I/O Error.", filename);
@@ -211,12 +257,18 @@ int main(int argc, char **argv)
 	init_scanner(&scanner, filename, src, src_size);
 	init_parser(&parser, &scanner);
 
+	size_t tree_size = 0;
+
 	while (!parser_eof(&parser)) {
 		struct decl *decl = parse_decl(&parser);
 		if (parser.errors) return 1;
+
 		print_decl(decl);
+		tree_size += count_decl_size(decl);
 		free_decl(decl);
 	}
+
+	printf("\nTotal AST size: %lu\n", tree_size);
 
 	return 0;
 }

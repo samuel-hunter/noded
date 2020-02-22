@@ -6,8 +6,6 @@
 
 #include "noded.h"
 
-#define BUFFER_NODE_MAX (UINT8_MAX+1)
-
 struct expr {
 	enum expr_type {
 		BAD_EXPR, NUM_LIT_EXPR, PAREN_EXPR,
@@ -171,7 +169,8 @@ struct decl {
 			struct position array_start;
 			uint8_t data[BUFFER_NODE_MAX];
 
-			// For debugging; how much of the string is initialized by the program?
+			// For debugging; how much of the string is
+			// initialized by the program?
 			size_t len;
 		} buf;
 
