@@ -10,8 +10,8 @@ void handle_error(const struct noded_error *err)
 {
 	fflush(stdout); // flush stdout so it doesn't mix with stderr.
 	fprintf(stderr, "ERR %s:%d:%d: %s.\n",
-                err->filename, err->pos.lineno,
-                err->pos.colno, err->msg);
+	        err->filename, err->pos.lineno,
+	        err->pos.colno, err->msg);
 }
 
 static void print_usage(const char *prog_name)
@@ -71,15 +71,15 @@ static void print_expr(struct expr *x, int depth, void *dat)
 		printf("ParenExpr\n");
 		break;
 	case UNARY_EXPR:
-		printf("UnaryExpr (%s) (suffix=%d)\n", strtoken(x->data.unary.op),
-                       x->data.unary.is_suffix);
+		printf("UnaryExpr (%s) (suffix=%d)\n",
+		       strtoken(x->data.unary.op), x->data.unary.is_suffix);
 		break;
 	case BINARY_EXPR:
 		printf("BinaryExpr (%s)\n", strtoken(x->data.binary.op));
 		break;
 	case STORE_EXPR:
 		printf("Store (%s, %s)\n",
-                       strtoken(x->data.store.kind), x->data.store.name);
+		       strtoken(x->data.store.kind), x->data.store.name);
 		break;
 	}
 }
@@ -101,30 +101,30 @@ static void print_stmt(struct stmt *x, int depth, void *dat)
 		break;
 	case EXPR_STMT:
 		printf("ExprStmt\n");
-		walk_expr(x->data.expr.x, &print_expr, depth+1, NULL);
+		walk_expr(&print_expr, x->data.expr.x, depth+1, NULL);
 		break;
 	case BRANCH_STMT:
 		printf("BranchStmt %s %s\n",
-                       strtoken(x->data.branch.tok), x->data.branch.label);
+		       strtoken(x->data.branch.tok), x->data.branch.label);
 		break;
 	case BLOCK_STMT:
 		printf("BlockStmt\n");
 		break;
 	case IF_STMT:
 		printf("IfStmt\n");
-		walk_expr(x->data.if_stmt.cond, &print_expr, depth+1, NULL);
+		walk_expr(&print_expr, x->data.if_stmt.cond, depth+1, NULL);
 		break;
 	case CASE_CLAUSE:
-		printf("CaseClause %d (default=%d)\n", x->data.case_clause.is_default,
-                       x->data.case_clause.x);
+		printf("CaseClause %d (default=%d)\n",
+		x->data.case_clause.is_default, x->data.case_clause.x);
 		break;
 	case SWITCH_STMT:
 		printf("SwitchStmt\n");
-		walk_expr(x->data.switch_stmt.tag, &print_expr, depth+1, NULL);
+		walk_expr(&print_expr, x->data.switch_stmt.tag, depth+1, NULL);
 		break;
 	case LOOP_STMT:
 		printf("LoopStmt (do=%d)\n", x->data.loop.exec_body_first);
-		walk_expr(x->data.loop.cond, &print_expr, depth+1, NULL);
+		walk_expr(&print_expr, x->data.loop.cond, depth+1, NULL);
 		break;
 	case HALT_STMT:
 		printf("HaltStmt\n");
@@ -158,11 +158,11 @@ static void print_decl(struct decl *decl)
 		break;
 	case PROC_DECL:
 		printf("ProcDecl %s\n", decl->data.proc.name);
-		walk_stmt(decl->data.proc.body, &print_stmt, 1, NULL);
+		walk_stmt(&print_stmt, decl->data.proc.body, 1, NULL);
 		break;
 	case PROC_COPY_DECL:
 		printf("ProcCopyDecl %s = %s\n", decl->data.proc_copy.name,
-                       decl->data.proc_copy.source);
+		       decl->data.proc_copy.source);
 		break;
 	case BUF_DECL:
 		printf("BufNodeDecl %s\n\t", decl->data.buf.name);
@@ -173,8 +173,8 @@ static void print_decl(struct decl *decl)
 		break;
 	case WIRE_DECL:
 		printf("WireDecl %s.%s -> %s.%s\n",
-                       decl->data.wire.source.node_name, decl->data.wire.source.name,
-                       decl->data.wire.dest.node_name, decl->data.wire.dest.name);
+		       decl->data.wire.source.node_name, decl->data.wire.source.name,
+		       decl->data.wire.dest.node_name, decl->data.wire.dest.name);
 		break;
 	}
 }
@@ -215,9 +215,7 @@ int main(int argc, char **argv)
 		struct decl *decl = parse_decl(&parser);
 		if (parser.errors) return 1;
 		print_decl(decl);
-
-		// Yes, I am not freeing my tree. This code is just
-		// meant as a test, not as part of a fully-featured program.
+		free_decl(decl);
 	}
 
 	return 0;

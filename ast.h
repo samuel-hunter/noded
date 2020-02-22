@@ -85,7 +85,8 @@ struct stmt {
 		struct block_stmt {
 			struct position start;
 
-			struct stmt *stmt_list;
+			// Array of struct stmt pointers
+			struct stmt **stmt_list;
 			size_t nstmts;
 		} block;
 
@@ -196,7 +197,17 @@ struct decl *new_decl(enum decl_type type);
 typedef void (*expr_func)(struct expr *, int depth, void *);
 typedef void (*stmt_func)(struct stmt *, int depth, void *);
 
-void walk_expr(struct expr *x, expr_func func, int depth, void *dat);
-void walk_stmt(struct stmt *x, stmt_func func, int depth, void *dat);
+// Handle higher nodes before deeper nodes.
+void walk_expr(expr_func func, struct expr *x, int depth, void *dat);
+void walk_stmt(stmt_func func, struct stmt *x, int depth, void *dat);
+
+// Handle deeper ndoes before higher nodes.
+void walk_expr2(expr_func func, struct expr *x, int depth, void *dat);
+void walk_stmt2(stmt_func func, struct stmt *x, int depth, void *dat);
+
+// Frees the node and all of its children.
+void free_expr(struct expr *x);
+void free_stmt(struct stmt *x);
+void free_decl(struct decl *x);
 
 #endif /* AST_H */
