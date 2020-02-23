@@ -71,8 +71,8 @@ const char *strdecl(const struct decl *d)
 	return decls[d->type];
 }
 
-static void walk_expr_(expr_func func, struct expr *e, void *dat, int depth,
-                       enum call_order order)
+static void walk_expr_(expr_func func, struct expr *e, void *dat,
+	int depth, enum call_order order)
 {
 
 	if (order == PARENT_FIRST)
@@ -99,7 +99,7 @@ static void walk_expr_(expr_func func, struct expr *e, void *dat, int depth,
 }
 
 static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
-                      void *dat, int depth, enum call_order order)
+	void *dat, int depth, enum call_order order)
 {
 
 	if (order == PARENT_FIRST)
@@ -159,19 +159,19 @@ static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
 }
 
 void walk_expr(expr_func func, struct expr *e, void *dat,
-               enum call_order order)
+	enum call_order order)
 {
 	walk_expr_(func, e, dat, 0, order);
 }
 
 void walk_stmt(stmt_func sfunc, expr_func efunc,
-               struct stmt *s, void *dat, enum call_order order)
+	struct stmt *s, void *dat, enum call_order order)
 {
 	walk_stmt_(sfunc, efunc, s, dat, 0, order);
 }
 
 void walk_decl(decl_func dfunc, stmt_func sfunc, expr_func efunc,
-               struct decl *d, void *dat, enum call_order order)
+	struct decl *d, void *dat, enum call_order order)
 {
 	if (order == PARENT_FIRST) {
 		dfunc(d, dat);

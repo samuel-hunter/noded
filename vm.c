@@ -6,7 +6,7 @@
 #define INITIAL_STACK_SIZE 8
 
 struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
-                                send_handler send, recv_handler recv)
+	send_handler send, recv_handler recv)
 {
 	if (code_size > (size_t)UINT16_MAX + 1)
 		errx(1, "Bytecode size too large");

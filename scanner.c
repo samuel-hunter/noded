@@ -261,7 +261,7 @@ static enum token switch2(struct scanner *s, enum token tok0, enum token tok1)
 }
 
 static enum token switch3(struct scanner *s, enum token tok0, enum token tok1,
-                          char chr2, enum token tok2)
+	char chr2, enum token tok2)
 {
 
 	if (s->chr == '=') {
@@ -276,7 +276,7 @@ static enum token switch3(struct scanner *s, enum token tok0, enum token tok1,
 }
 
 static enum token switch4(struct scanner *s, enum token tok0, enum token tok1,
-                          char chr2, enum token tok2, enum token tok3)
+	char chr2, enum token tok2, enum token tok3)
 {
 	if (s->chr == '=') {
 		next(s);

@@ -68,7 +68,7 @@ static void send_error(struct parser *p, const char *fmt, ...)
 }
 
 void init_parser(struct parser *parser, const char filename[],
-                 const char src[], size_t src_size)
+	const char src[], size_t src_size)
 {
 	memset(parser, 0, sizeof(*parser));
 	init_scanner(&parser->scanner, filename, src, src_size);
@@ -100,7 +100,8 @@ static void expect(struct parser *p, enum token expected, struct fulltoken *dest
 // Convert an escape sequence into a byte. Write the number of chars
 // to advance into *advance, and whether the parse is successful into
 // *ok.
-static uint8_t parse_escape(struct parser *p, const char *s, int *advance, bool *ok)
+static uint8_t parse_escape(struct parser *p, const char *s,
+	int *advance, bool *ok)
 {
 	size_t len = strlen(s);
 	char buf[4] = {0};
@@ -436,7 +437,8 @@ static struct expr *parse_primary_expr(struct parser *p)
 		result = new_expr(STORE_EXPR);
 		result->data.store.start = p->current.pos;
 		result->data.store.kind = p->current.tok;
-		result->data.store.name_id = sym_id(&p->dict, p->current.lit);
+		result->data.store.name_id =
+			sym_id(&p->dict, p->current.lit);
 
 		next(p); // C o n s u m e
 		return result;
@@ -478,7 +480,8 @@ static struct expr *parse_binary_expr(struct parser *p, int prec)
 				y = parse_binary_expr(p, prec+1);
 			}
 
-			// Wrap our new binary expr around our current two.
+			// Wrap our new binary expr around our current
+			// two.
 			tmp = new_expr(BINARY_EXPR);
 			tmp->data.binary.x = x;
 			tmp->data.binary.op = op;

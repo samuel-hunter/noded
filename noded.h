@@ -480,11 +480,11 @@ enum call_order {
 };
 
 void walk_expr(expr_func func, struct expr *e, void *dat,
-               enum call_order order);
+	enum call_order order);
 void walk_stmt(stmt_func sfunc, expr_func efunc,
-               struct stmt *s, void *dat, enum call_order order);
+	struct stmt *s, void *dat, enum call_order order);
 void walk_decl(decl_func dfunc, stmt_func sfunc, expr_func efunc,
-               struct decl *d, void *dat, enum call_order order);
+	struct decl *d, void *dat, enum call_order order);
 
 // Frees the node and all of its children.
 void free_expr(struct expr *e);
@@ -493,14 +493,14 @@ void free_decl(struct decl *d);
 
 // parser.c
 void init_parser(struct parser *parser, const char filename[],
-                 const char src[], size_t src_len);
+	const char src[], size_t src_len);
 bool parser_eof(const struct parser *parser);
 struct decl *parse_decl(struct parser *parser);
 
 // vm.c
 
 struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
-                                send_handler send, recv_handler recv);
+	send_handler send, recv_handler recv);
 void run(struct proc_node *node, void *handler_dat);
 
 #endif /* NODED_H */

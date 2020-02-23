@@ -53,7 +53,8 @@ static uint8_t recv(int porti, void *dat)
 static void test_vm(struct vm_test *test)
 {
 	printf("Running %s...\n", test->name);
-	struct proc_node *node = new_proc_node(test->code, test->code_size, &send, &recv);
+	struct proc_node *node =
+		new_proc_node(test->code, test->code_size, &send, &recv);
 	run(node, test);
 
 	// Make sure *all* messages were sent and received
@@ -61,12 +62,14 @@ static void test_vm(struct vm_test *test)
 		struct test_port *port = &test->ports[i];
 		if (port->send_idx != port->send_len) {
 			errx(1, "Expected %lu messages to be sent to port %lu, "
-			     "but found only %lu.", port->send_len, i, port->send_idx);
+			     "but found only %lu.", port->send_len, i,
+				port->send_idx);
 		}
 
 		if (port->recv_idx != port->recv_len) {
-			errx(1, "Expected %lu messages to be received to port %lu, "
-			     "but found only %lu.", port->recv_len, i, port->recv_idx);
+			errx(1, "Expected %lu messages to be received to "
+			     "port %lu, but found only %lu.",
+			     port->recv_len, i, port->recv_idx);
 		}
 	}
 
