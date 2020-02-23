@@ -1,4 +1,4 @@
-#include <ctype.h>
+#include <ctype.h> // isgraph
 #include <stdio.h>
 #include <stdlib.h>
 #include <err.h>
@@ -57,7 +57,7 @@ static void indent(int depth)
 
 static void print_expr(struct expr *e, void *dat, int depth)
 {
-	(void)dat;
+	struct symdict *dict = (struct symdict *)dat;
 
 	indent(depth);
 	switch (e->type) {
@@ -73,7 +73,7 @@ static void print_expr(struct expr *e, void *dat, int depth)
 		break;
 	case STORE_EXPR:
 		printf("%s (%s, %s)\n", strexpr(e),
-		       strtoken(e->data.store.kind), e->data.store.name);
+		       strtoken(e->data.store.kind), id_sym(dict, e->data.store.name_id));
 		break;
 	default:
 		puts(strexpr(e));
@@ -82,16 +82,18 @@ static void print_expr(struct expr *e, void *dat, int depth)
 
 static void print_stmt(struct stmt *s, void *dat, int depth)
 {
-	(void)dat;
+	struct symdict *dict = (struct symdict *)dat;
 
 	indent(depth);
 	switch (s->type) {
 	case LABELED_STMT:
-		printf("%s %s\n", strstmt(s), s->data.labeled.label);
+		printf("%s %s\n", strstmt(s),
+		       id_sym(dict, s->data.labeled.label_id));
 		break;
 	case BRANCH_STMT:
 		printf("%s %s %s\n", strstmt(s),
-		       strtoken(s->data.branch.tok), s->data.branch.label);
+		       strtoken(s->data.branch.tok),
+		       id_sym(dict, s->data.branch.label_id));
 		break;
 	case CASE_CLAUSE:
 		printf("%s ", strstmt(s));
@@ -134,27 +136,33 @@ static void print_array(uint8_t data[], size_t len)
 
 static void print_decl(struct decl *d, void *dat)
 {
-	(void)dat;
+	struct symdict *dict = (struct symdict *)dat;
 
 	switch (d->type) {
 	case PROC_DECL:
-		printf("%s %s\n", strdecl(d), d->data.proc.name);
+		printf("%s %s\n", strdecl(d),
+		       id_sym(dict, d->data.proc.name_id));
 		break;
 	case PROC_COPY_DECL:
-		printf("%s %s = %s\n", strdecl(d), d->data.proc_copy.name,
-		       d->data.proc_copy.source);
+		printf("%s %s = %s\n", strdecl(d),
+		       id_sym(dict, d->data.proc_copy.name_id),
+		       id_sym(dict, d->data.proc_copy.source_id));
 		break;
 	case BUF_DECL:
-		printf("%s %s =\n\t", strdecl(d), d->data.buf.name);
+		printf("%s %s =\n\t", strdecl(d),
+		       id_sym(dict, d->data.buf.name_id));
 		print_array(d->data.buf.data, d->data.buf.len);
 		break;
 	case STACK_DECL:
-		printf("%s %s\n", strdecl(d), d->data.stack.name);
+		printf("%s %s\n", strdecl(d),
+		       id_sym(dict, d->data.stack.name_id));
 		break;
 	case WIRE_DECL:
 		printf("%s %s.%s -> %s.%s\n", strdecl(d),
-		       d->data.wire.source.node_name, d->data.wire.source.name,
-		       d->data.wire.dest.node_name, d->data.wire.dest.name);
+		       id_sym(dict, d->data.wire.source.node_id),
+		       id_sym(dict, d->data.wire.source.name_id),
+		       id_sym(dict, d->data.wire.dest.node_id),
+		       id_sym(dict, d->data.wire.dest.name_id));
 		break;
 	default:
 		puts(strdecl(d));
@@ -188,7 +196,6 @@ int main(int argc, char **argv)
 
 	char *src;
 	size_t src_size;
-	struct scanner scanner;
 	struct parser parser;
 
 	// Choose the file to interpret
@@ -218,8 +225,7 @@ int main(int argc, char **argv)
 	}
 
 	// Scan the file token-by-token
-	init_scanner(&scanner, filename, src, src_size);
-	init_parser(&parser, &scanner);
+	init_parser(&parser, filename, src, src_size);
 
 	size_t tree_size = 0;
 
@@ -228,13 +234,14 @@ int main(int argc, char **argv)
 		if (parser.errors) return 1;
 
 		walk_decl(&print_decl, &print_stmt, &print_expr,
-		          decl, NULL, PARENT_FIRST);
+		          decl, &parser.dict, PARENT_FIRST);
 		walk_decl(&count_decl_size, &count_stmt_size, &count_expr_size,
 		          decl, &tree_size, PARENT_FIRST);
 		free_decl(decl);
 	}
 
 	printf("\nTotal AST size: %lu\n", tree_size);
+	printf("Dict size: %lu\n", dict_size(&parser.dict));
 
 	return 0;
 }

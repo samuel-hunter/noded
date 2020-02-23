@@ -43,7 +43,7 @@ struct expr {
 		struct store_expr {
 			struct position start;
 			enum token kind; // VARIABLE, PORT
-			char name[LITERAL_MAX+1];
+			size_t name_id;
 		} store;
 	} data;
 };
@@ -65,7 +65,7 @@ struct stmt {
 
 		struct labeled_stmt {
 			struct position start;
-			char label[LITERAL_MAX+1];
+			size_t label_id;
 			struct stmt *stmt;
 		} labeled;
 
@@ -77,7 +77,7 @@ struct stmt {
 			struct position start;
 			enum token tok; // BREAK, GOTO, CONTINUE
 			struct position label_pos;
-			char label[LITERAL_MAX+1];
+			size_t label_id;
 		} branch;
 
 		struct block_stmt {
@@ -125,10 +125,10 @@ struct stmt {
 
 struct port {
 	struct position node_pos;
-	char node_name[LITERAL_MAX+1];
+	size_t node_id;
 
 	struct position name_pos;
-	char name[LITERAL_MAX+1];
+	size_t name_id;
 };
 
 struct decl {
@@ -145,7 +145,7 @@ struct decl {
 			struct position start;
 
 			struct position name_pos;
-			char name[LITERAL_MAX+1];
+			size_t name_id;
 
 			struct stmt *body;
 		} proc;
@@ -154,17 +154,17 @@ struct decl {
 			struct position start;
 
 			struct position name_pos;
-			char name[LITERAL_MAX+1];
+			size_t name_id;
 
 			struct position source_pos;
-			char source[LITERAL_MAX+1];
+			size_t source_id;
 		} proc_copy;
 
 		struct buf_node_decl {
 			struct position start;
 
 			struct position name_pos;
-			char name[LITERAL_MAX+1];
+			size_t name_id;
 
 			struct position array_start;
 			uint8_t data[BUFFER_NODE_MAX];
@@ -178,7 +178,7 @@ struct decl {
 			struct position start;
 
 			struct position name_pos;
-			char name[LITERAL_MAX+1];
+			size_t name_id;
 		} stack;
 
 		struct wire_decl {

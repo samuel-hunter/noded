@@ -137,19 +137,26 @@ struct noded_error {
 
 struct scanner {
 	const char *filename;
-	char *src;
+	const char *src;
 	size_t src_len;
 
-	char chr; // Current character
-	size_t offset;     // byte offset
+	char chr;      // Current character
+	size_t offset; // byte offset
 
 	struct position pos;
 
 	bool has_errored; // Whether an error occurred during scanning
 };
 
+struct symdict {
+	char **syms;
+	size_t len;
+	size_t cap;
+};
+
 struct parser {
-	struct scanner *scanner;
+	struct scanner scanner;
+	struct symdict dict;
 	size_t errors;
 
 	// Look one token ahead
@@ -178,11 +185,18 @@ const char *strtoken(enum token tok);
 
 // scanner.c
 void init_scanner(struct scanner *scanner, const char filename[],
-                  char src[], size_t src_len);
+                  const char src[], size_t src_len);
 void scan(struct scanner *scanner, struct fulltoken *dest);
 
+// dict.c
+
+size_t sym_id(struct symdict *dict, const char *sym);
+const char *id_sym(const struct symdict *dict, size_t id);
+size_t dict_size(const struct symdict *dict);
+
 // parser.c
-void init_parser(struct parser *parser, struct scanner *scanner);
+void init_parser(struct parser *parser, const char filename[],
+                 const char src[], size_t src_len);
 bool parser_eof(const struct parser *parser);
 struct decl *parse_decl(struct parser *parser);
 

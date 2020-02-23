@@ -42,7 +42,7 @@ static void next(struct scanner *s)
 }
 
 void init_scanner(struct scanner *scanner, const char filename[],
-                  char src[], size_t src_len)
+                  const char src[], size_t src_len)
 {
 	memset(scanner, 0, sizeof(*scanner));
 	scanner->src = src;

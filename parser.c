@@ -40,7 +40,7 @@ static const size_t max_errors = 10;
 
 static void next(struct parser *p)
 {
-	scan(p->scanner, &p->current);
+	scan(&p->scanner, &p->current);
 }
 
 static void send_error(struct parser *p, const char *fmt, ...)
@@ -49,7 +49,7 @@ static void send_error(struct parser *p, const char *fmt, ...)
 	va_list ap;
 
 	// Prepare the error value.
-	err.filename = p->scanner->filename;
+	err.filename = p->scanner.filename;
 	memcpy(&err.pos, &p->current.pos, sizeof(err.pos));
 
 	va_start(ap, fmt);
@@ -68,11 +68,12 @@ static void send_error(struct parser *p, const char *fmt, ...)
 	}
 }
 
-void init_parser(struct parser *parser, struct scanner *scanner)
+void init_parser(struct parser *parser, const char filename[],
+                 const char src[], size_t src_size)
 {
 	memset(parser, 0, sizeof(*parser));
-	parser->scanner = scanner;
-	next(parser);
+	init_scanner(&parser->scanner, filename, src, src_size);
+	next(parser); // Populate our token buffer.
 }
 
 bool parser_eof(const struct parser *parser)
@@ -366,9 +367,9 @@ static void parse_port(struct parser *p, struct port *dest)
 	expect(p, IDENTIFIER, &port); // port
 
 	dest->node_pos = node.pos;
-	strcpy(dest->node_name, node.lit);
+	dest->node_id = sym_id(&p->dict, node.lit);
 	dest->name_pos = port.pos;
-	strcpy(dest->name, port.lit);
+	dest->name_id = sym_id(&p->dict, port.lit);
 }
 
 // ---Expressions---
@@ -436,7 +437,7 @@ static struct expr *parse_primary_expr(struct parser *p)
 		result = new_expr(STORE_EXPR);
 		result->data.store.start = p->current.pos;
 		result->data.store.kind = p->current.tok;
-		strcpy(result->data.store.name, p->current.lit);
+		result->data.store.name_id = sym_id(&p->dict, p->current.lit);
 
 		next(p); // C o n s u m e
 		return result;
@@ -525,7 +526,7 @@ static struct stmt *parse_labeled_stmt(struct parser *p)
 
 	result = new_stmt(LABELED_STMT);
 	result->data.labeled.start = label.pos;
-	strcpy(result->data.labeled.label, label.lit);
+	result->data.labeled.label_id = sym_id(&p->dict, label.lit);
 	result->data.labeled.stmt = stmt;
 	return result;
 }
@@ -559,7 +560,6 @@ static struct stmt *parse_branch_stmt(struct parser *p)
 		result = new_stmt(BRANCH_STMT);
 		result->data.branch.start = keyword.pos;
 		result->data.branch.tok = keyword.tok;
-		strcpy(result->data.branch.label, "");
 		return result;
 	case GOTO:
 		expect(p, IDENTIFIER, &label);
@@ -569,7 +569,7 @@ static struct stmt *parse_branch_stmt(struct parser *p)
 		result->data.branch.start = keyword.pos;
 		result->data.branch.tok = keyword.tok;
 		result->data.branch.label_pos = label.pos;
-		strcpy(result->data.branch.label, label.lit);
+		result->data.branch.label_id = sym_id(&p->dict, label.lit);
 		return result;
 	default:
 		send_error(p, "Expected break, continue, or goto, but found %s",
@@ -829,7 +829,7 @@ static struct decl *parse_proc_node_decl(struct parser *p)
 		result = new_decl(PROC_DECL);
 		result->data.proc.start = keyword.pos;
 		result->data.proc.name_pos = name.pos;
-		strcpy(result->data.proc.name, name.lit);
+		result->data.proc.name_id = sym_id(&p->dict, name.lit);
 		result->data.proc.body = parse_block_stmt(p);
 		return result;
 	case ASSIGN:
@@ -840,9 +840,9 @@ static struct decl *parse_proc_node_decl(struct parser *p)
 		result = new_decl(PROC_COPY_DECL);
 		result->data.proc_copy.start = keyword.pos;
 		result->data.proc_copy.name_pos = name.pos;
-		strcpy(result->data.proc_copy.name, name.lit);
+		result->data.proc_copy.name_id = sym_id(&p->dict, name.lit);
 		result->data.proc_copy.source_pos = source.pos;
-		strcpy(result->data.proc_copy.source, source.lit);
+		result->data.proc_copy.source_id = sym_id(&p->dict, source.lit);
 		return result;
 	default:
 		send_error(p, "Expected { or =, but found %s",
@@ -868,7 +868,7 @@ static struct decl *parse_buf_node_decl(struct parser *p)
 	result = new_decl(BUF_DECL);
 	result->data.buf.start = keyword.pos;
 	result->data.buf.name_pos = identifier.pos;
-	strcpy(result->data.buf.name, identifier.lit);
+	result->data.buf.name_id = sym_id(&p->dict, identifier.lit);
 	result->data.buf.array_start = p->current.pos;
 
 	switch (p->current.tok) {
@@ -900,7 +900,7 @@ static struct decl *parse_stack_node_decl(struct parser *p)
 	result = new_decl(STACK_DECL);
 	result->data.stack.start = keyword.pos;
 	result->data.stack.name_pos = identifier.pos;
-	strcpy(result->data.stack.name, identifier.lit);
+	result->data.stack.name_id = sym_id(&p->dict, identifier.lit);
 	return result;
 }
 
