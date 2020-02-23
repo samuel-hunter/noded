@@ -33,51 +33,22 @@ static struct decl *parse_stack_node_decl(struct parser *p);
 static struct decl *parse_wire_decl(struct parser *p);
 struct decl *parse_decl(struct parser *p);
 
-
-// Number of errors before the parser panics.
-static const size_t max_errors = 10;
-
 static void next(struct parser *p)
 {
 	scan(&p->scanner, &p->current);
 }
 
-static void send_error(struct parser *p, const char *fmt, ...)
-{
-	struct noded_error err;
-	va_list ap;
-
-	// Prepare the error value.
-	err.filename = p->scanner.filename;
-	memcpy(&err.pos, &p->current.pos, sizeof(err.pos));
-
-	va_start(ap, fmt);
-	vsnprintf(err.msg, ERROR_MAX+1, fmt, ap);
-	va_end(ap);
-
-	// Send the error over
-	handle_error(&err);
-
-	// Panic if the errors are too much.
-	p->errors++;
-	if (p->errors >= max_errors) {
-		fflush(stdout);
-		fprintf(stderr, "Too many errors.\n");
-		exit(1);
-	}
-}
-
-void init_parser(struct parser *parser, const char filename[],
+void init_parser(struct parser *parser,
 	const char src[], size_t src_size)
 {
 	memset(parser, 0, sizeof(*parser));
-	init_scanner(&parser->scanner, filename, src, src_size);
+	init_scanner(&parser->scanner, src, src_size);
 	next(parser); // Populate our token buffer.
 }
 
 bool parser_eof(const struct parser *parser)
 {
-	return parser->errors > 0 || parser->current.tok == TOK_EOF;
+	return parser->current.tok == TOK_EOF;
 }
 
 // Parse Helpers
@@ -90,7 +61,7 @@ static void expect(struct parser *p, enum token expected, struct fulltoken *dest
 	}
 
 	if (p->current.tok != expected) {
-		send_error(p, "Expected %s, but found %s",
+		send_error(&p->current.pos, ERR, "Expected %s, but found %s",
 		         strtoken(expected), strtoken(p->current.tok));
 	} else {
 		next(p);
@@ -110,7 +81,8 @@ static uint8_t parse_escape(struct parser *p, const char *s,
 
 	// s[0] == '\', guaranteed.
 	if (len < 2) {
-		send_error(p, "Escape sequence '%s' too short", s);
+		send_error(&p->current.pos, ERR,
+		           "Escape sequence '%s' too short", s);
 		*advance = 0;
 		*ok = false;
 		return 0;
@@ -123,7 +95,8 @@ static uint8_t parse_escape(struct parser *p, const char *s,
 	case 'x':
 		// Escape sequence \x##, ## = hexadecimal byte
 		if (len < 4) {
-			send_error(p, "Escape sequence '%s' too short", s);
+			send_error(&p->current.pos, ERR,
+			           "Escape sequence '%s' too short", s);
 			*ok = false;
 			return 0;
 		}
@@ -135,7 +108,7 @@ static uint8_t parse_escape(struct parser *p, const char *s,
 		// Don't check for range errors; a 2-digit hex number
 		// can only go up to 255 anyway.
 		if (errno != 0 && val == 0) {
-			send_error(p, "Invalid value %s");
+			send_error(&p->current.pos, ERR, "Invalid value %s", buf);
 			*ok = false;
 			return 0;
 		}
@@ -147,7 +120,8 @@ static uint8_t parse_escape(struct parser *p, const char *s,
 	case '2':
 		// Escape sequence \###, ### = octal byte
 		if (len < 4) {
-			send_error(p, "Escape sequence %s too short", s);
+			send_error(&p->current.pos, ERR,
+			           "Escape sequence %s too short", s);
 			*ok = false;
 			return 0;
 		}
@@ -159,7 +133,7 @@ static uint8_t parse_escape(struct parser *p, const char *s,
 		// Don't check for range errors; a 3-digit octal
 		// number can only go up to 255 anyway.
 		if (errno != 0 && val == 0) {
-			send_error(p, "Invalid value %s");
+			send_error(&p->current.pos, ERR, "Invalid value %s", buf);
 			*ok = false;
 			return 0;
 		}
@@ -182,14 +156,15 @@ static uint8_t parse_escape(struct parser *p, const char *s,
 		*advance = 2;
 		return '"';
 	default:
-		send_error(p, "Unknown escape sequence at %s", s);
+		send_error(&p->current.pos, ERR,
+		           "Unknown escape sequence at %s", s);
 		*ok = false;
 		return 0;
 	}
 }
 
 // Consume a number literal token and return its number value. Send an
-// error to the parser on exceptional cases.
+// error on exceptional cases.
 static uint8_t parse_number(struct parser *p)
 {
 	struct fulltoken number;
@@ -208,14 +183,17 @@ static uint8_t parse_number(struct parser *p)
 	// Handle standard strtol errors.
 	if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN)) ||
 	    (errno != 0 && val == 0)) {
-		send_error(p, "Invalid or out-of-range value %s");
+		send_error(&number.pos, ERR,
+		           "Invalid or out-of-range value %s",
+		           number.lit);
 		return 0;
 	}
 
 	// Handle noded-specific range errors.
 	if (val < INT8_MIN || val > UINT8_MAX) {
-		send_error(p, "Value %s out of range [%d, %d]",
-		                   INT8_MIN, UINT8_MAX);
+		send_error(&number.pos, ERR,
+		           "Value %s out of range [%d, %d]",
+		           INT8_MIN, UINT8_MAX);
 	}
 
 	// Wrap the number where appropriate.
@@ -227,8 +205,8 @@ static uint8_t parse_number(struct parser *p)
 	}
 }
 
-// Convert a character literal into a byte value. Send an error to the
-// parser on exceptional cases.
+// Convert a character literal into a byte value. Send an error on
+// exceptional cases.
 uint8_t parse_char(struct parser *p)
 {
 	struct fulltoken literal;
@@ -250,18 +228,21 @@ uint8_t parse_char(struct parser *p)
 			return 0;
 
 		if ((size_t) advance < len) {
-			send_error(p, "Character literal %s too long", literal.lit);
+			send_error(&literal.pos, ERR,
+			           "Character literal %s too long",
+			           literal.lit);
 			return 0;
 		}
 
 		return val;
 	} else if (len == 0) {
-		send_error(p, "Empty character");
+		send_error(&literal.pos, ERR, "Empty character");
 		return 0;
 	} else if (len == 1) {
 		return literal.lit[0];
 	} else {
-		send_error(p, "Character literal %s too long", literal.lit);
+		send_error(&literal.pos, ERR,
+		           "Character literal %s too long", literal.lit);
 		return 0;
 	}
 }
@@ -274,7 +255,8 @@ uint8_t parse_constant(struct parser *p)
 	case CHAR:
 		return parse_char(p);
 	default:
-		send_error(p, "Expected number constant, but received %s",
+		send_error(&p->current.pos, ERR,
+		           "Expected number constant, but received %s",
 		           strtoken(p->current.tok));
 		return 0;
 	}
@@ -297,7 +279,7 @@ void parse_string(struct parser *p, uint8_t dest[], size_t *len)
 
 		if (size == BUFFER_NODE_MAX) {
 			// String too large
-			send_error(p, "String too large");
+			send_error(&literal.pos, ERR, "String too large");
 			goto exit;
 		}
 
@@ -333,7 +315,7 @@ void parse_array(struct parser *p, uint8_t dest[], size_t *len)
 
 	while (true) {
 		if (size == BUFFER_NODE_MAX) {
-			send_error(p, "Array too long");
+			send_error(&p->current.pos, ERR, "Array too long");
 			goto exit;
 		}
 
@@ -347,7 +329,8 @@ void parse_array(struct parser *p, uint8_t dest[], size_t *len)
 			next(p); // Consume ,
 			break;
 		default:
-			send_error(p, "Expected , or }, but found %s",
+			send_error(&p->current.pos, ERR,
+			           "Expected , or }, but found %s",
 			           strtoken(p->current.tok));
 			next(p); // Always progress.
 		}
@@ -443,8 +426,9 @@ static struct expr *parse_primary_expr(struct parser *p)
 		next(p); // C o n s u m e
 		return result;
 	default:
-		send_error(p, "Expected number, char, or (, but found %s",
-		         strtoken(p->current.tok));
+		send_error(&p->current.pos, ERR,
+		           "Expected number, char, or (, but found %s",
+		           strtoken(p->current.tok));
 		result = new_expr(BAD_EXPR);
 		result->data.bad.start = p->current.pos;
 		next(p); // Always advance
@@ -574,8 +558,9 @@ static struct stmt *parse_branch_stmt(struct parser *p)
 		result->data.branch.label_id = sym_id(&p->dict, label.lit);
 		return result;
 	default:
-		send_error(p, "Expected break, continue, or goto, but found %s",
-		         strtoken(keyword.tok));
+		send_error(&keyword.pos, ERR,
+		           "Expected break, continue, or goto, but found %s",
+		           strtoken(keyword.tok));
 
 		result = new_stmt(BAD_STMT);
 		result->data.bad.start = keyword.pos;
@@ -659,7 +644,8 @@ static struct stmt *parse_case_clause(struct parser *p)
 		result->data.case_clause.is_default = true;
 		return result;
 	default:
-		send_error(p, "Expected case or default, but found %s",
+		send_error(&p->current.pos, ERR,
+		           "Expected case or default, but found %s",
 		           strtoken(p->current.tok));
 		next(p); // Always progress
 		return result;
@@ -798,7 +784,8 @@ static struct stmt *parse_stmt(struct parser *p)
 		if (isunary(p->current.tok) || isoperand(p->current.tok)) {
 			return parse_expr_stmt(p);
 		} else {
-			send_error(p, "Expected start of statement, found %s",
+			send_error(&p->current.pos, ERR,
+			           "Expected start of statement, found %s",
 			           strtoken(p->current.tok));
 
 			result = new_stmt(BAD_STMT);
@@ -847,8 +834,9 @@ static struct decl *parse_proc_node_decl(struct parser *p)
 		result->data.proc_copy.source_id = sym_id(&p->dict, source.lit);
 		return result;
 	default:
-		send_error(p, "Expected { or =, but found %s",
-		         strtoken(p->current.tok));
+		send_error(&p->current.pos, ERR,
+		           "Expected { or =, but found %s",
+		           strtoken(p->current.tok));
 		next(p); // Always progress
 
 		result = new_decl(BAD_DECL);
@@ -881,7 +869,8 @@ static struct decl *parse_buf_node_decl(struct parser *p)
 		parse_array(p, result->data.buf.data, &result->data.buf.len);
 		break;
 	default:
-		send_error(p, "Expected string literal or {, but found %s",
+		send_error(&p->current.pos, ERR,
+		           "Expected string literal or {, but found %s",
 		           strtoken(p->current.tok));
 	}
 
@@ -932,7 +921,8 @@ struct decl *parse_decl(struct parser *parser)
 	case IDENTIFIER:
 		return parse_wire_decl(parser);
 	default:
-		send_error(parser, "Expected processor, buffer, or "
+		send_error(&parser->current.pos, ERR,
+		           "Expected processor, buffer, or "
 		           "wire declaration, but found %s",
 		           strtoken(parser->current.tok));
 		next(parser); // Always progress.

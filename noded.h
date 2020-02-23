@@ -14,6 +14,8 @@
 typedef void (*send_handler)(uint8_t val, int port, void *dat);
 typedef uint8_t (*recv_handler)(int port, void *dat);
 
+enum error_type { WARN, ERR, FATAL };
+
 // Note: LITERAL_MAX is calculated by multiplying the buffer size with
 // the longest escape sequence for a string (\x##, or \###). This is
 // the longest literal size that any program would reasonably need.
@@ -200,14 +202,7 @@ struct fulltoken {
 	struct position pos;
 };
 
-struct noded_error {
-	char msg[ERROR_MAX+1];
-	const char *filename;
-	struct position pos;
-};
-
 struct scanner {
-	const char *filename;
 	const char *src;
 	size_t src_len;
 
@@ -215,8 +210,6 @@ struct scanner {
 	size_t offset; // byte offset
 
 	struct position pos;
-
-	bool has_errored; // Whether an error occurred during scanning
 };
 
 struct symdict {
@@ -228,7 +221,6 @@ struct symdict {
 struct parser {
 	struct scanner scanner;
 	struct symdict dict;
-	size_t errors;
 
 	// Look one token ahead
 	struct fulltoken current;
@@ -432,7 +424,8 @@ struct proc_node {
 };
 
 // noded.c
-void handle_error(const struct noded_error *err);
+void send_error(const struct position *pos, enum error_type type,
+	const char *fmt, ...);
 
 // util.c
 void *emalloc(size_t size);
@@ -451,7 +444,7 @@ bool issuffix(enum token tok);
 const char *strtoken(enum token tok);
 
 // scanner.c
-void init_scanner(struct scanner *scanner, const char filename[],
+void init_scanner(struct scanner *scanner,
                   const char src[], size_t src_len);
 void scan(struct scanner *scanner, struct fulltoken *dest);
 
@@ -492,7 +485,7 @@ void free_stmt(struct stmt *s);
 void free_decl(struct decl *d);
 
 // parser.c
-void init_parser(struct parser *parser, const char filename[],
+void init_parser(struct parser *parser,
 	const char src[], size_t src_len);
 bool parser_eof(const struct parser *parser);
 struct decl *parse_decl(struct parser *parser);

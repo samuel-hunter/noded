@@ -1,16 +1,59 @@
 #include <ctype.h> // isgraph
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <err.h>
 
 #include "noded.h"
 
-void handle_error(const struct noded_error *err)
+static struct globals {
+	const char *filename;
+	size_t errors;
+} Globals = {0};
+
+// Number of errors before the parser panics.
+static const size_t max_errors = 10;
+
+void send_error(const struct position *pos, enum error_type type,
+	const char *fmt, ...)
 {
-	fflush(stdout); // flush stdout so it doesn't mix with stderr.
-	fprintf(stderr, "ERR %s:%d:%d: %s.\n",
-	        err->filename, err->pos.lineno,
-	        err->pos.colno, err->msg);
+	va_list ap;
+	const char *typestr;
+
+	switch (type) {
+	case WARN:
+		typestr = "WARN";
+		break;
+	case ERR:
+		typestr = "ERR";
+		break;
+	case FATAL:
+		typestr = "FATAL";
+		break;
+	}
+
+	fflush(stdout); // Flush stdout so that it doesn't mangle with stderr.
+	fprintf(stderr, "%s %s:%d:%d: ", typestr,
+	        Globals.filename, pos->lineno, pos->colno);
+
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+
+	fprintf(stderr, ".\n");
+
+	// Send an exit depending on fatality.
+	switch (type) {
+	case WARN:
+		break;
+	case ERR:
+		if (++Globals.errors > max_errors)
+			errx(1, "Too many errors.");
+		break;
+	case FATAL:
+		exit(1);
+		break;
+	}
 }
 
 static void print_usage(const char *prog_name)
@@ -190,7 +233,6 @@ static void count_decl_size(struct decl *d, void *dat)
 
 int main(int argc, char **argv)
 {
-	const char *filename;
 	FILE *f;
 
 	char *src;
@@ -202,12 +244,12 @@ int main(int argc, char **argv)
 		print_usage(argv[0]);
 		return 1;
 	} else if (argc == 2) {
-		filename = argv[1];
-		f = fopen(filename, "r");
+		Globals.filename = argv[1];
+		f = fopen(Globals.filename, "r");
 		if (f == NULL)
-			err(1, "Cannot open %s", filename);
+			err(1, "Cannot open %s", Globals.filename);
 	} else {
-		filename = "<stdin>";
+		Globals.filename = "<stdin>";
 		f = stdin;
 	}
 
@@ -217,20 +259,20 @@ int main(int argc, char **argv)
 	src = read_all(f, &src_size);
 	if (src == NULL) {
 		if (ferror(f)) {
-			errx(1, "%s: I/O Error.", filename);
+			errx(1, "%s: I/O Error.", Globals.filename);
 		} else {
-			fprintf(stderr, "WARN %s: Zero size file.\n", filename);
+			fprintf(stderr, "WARN %s: Zero size file.\n", Globals.filename);
 		}
 	}
 
 	// Scan the file token-by-token
-	init_parser(&parser, filename, src, src_size);
+	init_parser(&parser, src, src_size);
 
 	size_t tree_size = 0;
 
 	while (!parser_eof(&parser)) {
 		struct decl *decl = parse_decl(&parser);
-		if (parser.errors) return 1;
+		if (Globals.errors) return 1;
 
 		walk_decl(&print_decl, &print_stmt, &print_expr,
 		          decl, &parser.dict, PARENT_FIRST);
