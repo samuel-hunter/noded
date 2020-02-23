@@ -1,2 +1,5 @@
 *.o
 noded
+
+test-*
+!test-*.c
