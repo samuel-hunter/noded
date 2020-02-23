@@ -3,7 +3,6 @@
 #include <stdlib.h>
 
 #include "noded.h"
-#include "vm.h"
 
 struct vm_test {
 	const char *name;

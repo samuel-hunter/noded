@@ -4,7 +4,6 @@
 #include <err.h>
 
 #include "noded.h"
-#include "ast.h"
 
 void handle_error(const struct noded_error *err)
 {

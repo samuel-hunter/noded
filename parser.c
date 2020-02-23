@@ -7,7 +7,6 @@
 #include <limits.h>
 
 #include "noded.h"
-#include "ast.h"
 
 static struct expr *parse_num_lit_expr(struct parser *p);
 static struct expr *parse_unary_expr(struct parser *p);

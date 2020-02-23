@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "noded.h"
-#include "vm.h"
 
 #define INITIAL_STACK_SIZE 8
 

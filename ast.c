@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "noded.h"
-#include "ast.h"
 
 static const char *exprs[] = {
 	[BAD_EXPR] = "BadExpr",

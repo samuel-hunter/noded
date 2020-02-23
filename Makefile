@@ -20,7 +20,7 @@ $(TARGET): $(OBJECTS)
 test-vm: util.o vm.o test-vm.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-.c.o: noded.h ast.h vm.h
+.c.o: noded.h
 	$(CC) $(CFLAGS) -c $<
 
 clean:
