@@ -126,7 +126,7 @@ enum token {
 	keyword_end
 };
 
-enum instruction {
+enum opcode {
 	OP_INVALID,
 	OP_NOOP,
 
@@ -155,6 +155,7 @@ enum instruction {
 
 	OP_JMP,
 	OP_TJMP,
+	OP_FJMP,
 
 	// Keep ACTION# in order so someone can math the rest via
 	// ACTION0 + n (e.g. SAVE2 == SAVE0 + 2)
@@ -229,7 +230,7 @@ struct parser {
 struct expr {
 	enum expr_type {
 		BAD_EXPR, NUM_LIT_EXPR, PAREN_EXPR,
-		UNARY_EXPR, BINARY_EXPR, STORE_EXPR
+		UNARY_EXPR, BINARY_EXPR, COND_EXPR, STORE_EXPR
 	} type;
 	union {
 		struct bad_expr {
@@ -254,11 +255,16 @@ struct expr {
 		} unary;
 
 		struct binary_expr {
-			struct position start;
 			struct expr *x; // left operand
 			enum token op; // operator
 			struct expr *y; // right operand
 		} binary;
+
+		struct cond_expr {
+			struct expr *cond;
+			struct expr *when;
+			struct expr *otherwise;
+		} cond;
 
 		struct store_expr {
 			struct position start;
@@ -312,7 +318,7 @@ struct stmt {
 			struct position start;
 			struct expr *cond;
 			struct stmt *body;
-			struct stmt *otherwise;
+			struct stmt *otherwise; // Can be NULL
 		} if_stmt;
 
 		struct case_clause {
@@ -331,9 +337,14 @@ struct stmt {
 			struct position start;
 
 			bool exec_body_first; // do { ... } while ();
+
+			// init, post: For a for loop. Can be
+			// NULL. Always NULL if
+			// exec_body_first == true
 			struct stmt *init;
-			struct expr *cond;
 			struct stmt *post;
+
+			struct expr *cond;
 			struct stmt *body;
 		} loop;
 
@@ -361,7 +372,7 @@ struct decl {
 			struct position start;
 		} bad;
 
-		struct proc_node_decl {
+		struct proc_decl {
 			struct position start;
 
 			struct position name_pos;
@@ -370,7 +381,7 @@ struct decl {
 			struct stmt *body;
 		} proc;
 
-		struct proc_node_copy_decl {
+		struct proc_copy_decl {
 			struct position start;
 
 			struct position name_pos;
@@ -380,7 +391,7 @@ struct decl {
 			size_t source_id;
 		} proc_copy;
 
-		struct buf_node_decl {
+		struct buf_decl {
 			struct position start;
 
 			struct position name_pos;
@@ -394,7 +405,7 @@ struct decl {
 			size_t len;
 		} buf;
 
-		struct stack_node_decl {
+		struct stack_decl {
 			struct position start;
 
 			struct position name_pos;
@@ -491,9 +502,11 @@ bool parser_eof(const struct parser *parser);
 struct decl *parse_decl(struct parser *parser);
 
 // vm.c
-
 struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
 	send_handler send, recv_handler recv);
 void run(struct proc_node *node, void *handler_dat);
+
+// compiler.c
+uint8_t *compile(const struct proc_decl *s, size_t *len);
 
 #endif /* NODED_H */

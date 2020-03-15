@@ -542,7 +542,7 @@ int main(void)
 		// <= 0
 		OP_PUSH, 10,
 		OP_GTR,
-		OP_LNOT, // In total: ++$0 <= 0
+		OP_LNOT, // In total: ++$0 <= 10
 
 		// If true, go to 0
 		OP_TJMP, 0, 0,

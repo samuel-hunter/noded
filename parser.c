@@ -478,14 +478,31 @@ static struct expr *parse_binary_expr(struct parser *p, int prec)
 			op = p->current.tok;
 			next(p); // Consume operator.
 
-			y = parse_binary_expr(p, prec);
+			if (op == COND) {
+				// Special case: ternary operator ?:
 
-			tmp = new_expr(BINARY_EXPR);
-			tmp->data.binary.x = x;
-			tmp->data.binary.op = op;
-			tmp->data.binary.y = y;
+				y = parse_binary_expr(p, prec);
+				expect(p, COLON, NULL);
+				struct expr *z = parse_binary_expr(p, prec);
 
-			x = tmp;
+				tmp = new_expr(COND_EXPR);
+
+				tmp->data.cond.cond = x;
+				tmp->data.cond.when = y;
+				tmp->data.cond.otherwise = z;
+
+				x = tmp;
+			} else {
+				// Normal case: binary operator
+				y = parse_binary_expr(p, prec);
+
+				tmp = new_expr(BINARY_EXPR);
+				tmp->data.binary.x = x;
+				tmp->data.binary.op = op;
+				tmp->data.binary.y = y;
+
+				x = tmp;
+			}
 		}
 	}
 
@@ -617,7 +634,7 @@ static struct stmt *parse_if_stmt(struct parser *p)
 		next(p);                                        // else
 		result->data.if_stmt.otherwise = parse_stmt(p); // { ... }
 	} else {
-		result->data.if_stmt.otherwise = new_stmt(EMPTY_STMT);
+		result->data.if_stmt.otherwise = NULL;
 	}
 
 	result->data.if_stmt.start = keyword.pos;

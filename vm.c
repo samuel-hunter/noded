@@ -53,6 +53,12 @@ static uint8_t pop(struct proc_node *node)
 	return node->stack[--node->stack_top];
 }
 
+static uint16_t addr_value(const uint8_t *src)
+{
+	return ((uint16_t)(src[0])<<8) +
+	       (uint16_t)(src[1]);
+}
+
 void run(struct proc_node *node, void *handler_dat)
 {
 	while (true) {
@@ -134,18 +140,22 @@ void run(struct proc_node *node, void *handler_dat)
 			push(node, !pop(node));
 			break;
 		case OP_JMP:
-			node->isp =
-				((uint16_t)(node->code[node->isp+1])<<8) +
-				(uint16_t)(node->code[node->isp+2]);
+			node->isp = addr_value(&node->code[node->isp+1]);
 			advance = 0;
 			break;
 		case OP_TJMP:
 			advance = 3;
 
 			if (pop(node)) {
-				node->isp =
-					((uint16_t)(node->code[node->isp+1])<<8) +
-					(uint16_t)(node->code[node->isp+2]);
+				node->isp = addr_value(&node->code[node->isp+1]);
+				advance = 0;
+			}
+			break;
+		case OP_FJMP:
+			advance = 3;
+
+			if (!pop(node)) {
+				node->isp = addr_value(&node->code[node->isp+1]);
 				advance = 0;
 			}
 			break;

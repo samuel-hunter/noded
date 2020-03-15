@@ -129,6 +129,9 @@ enum token lookup(char ident[])
 	return IDENTIFIER;
 }
 
+// All information regarding precedence and associativity is found in
+// SPEC.md, section `EXPRESSIONS'.
+
 int precedence(enum token op)
 {
 	switch (op) {
@@ -187,9 +190,9 @@ int precedence(enum token op)
 bool isltr(enum token op)
 {
 	switch (precedence(op)) {
-	case 14:
-	case 3:
-	case 2:
+	case 14: // Prefixes
+	case 3:  // COND
+	case 2:  // ASSIGN, *_ASSIGN
 		return false;
 	default:
 		return true;
@@ -218,8 +221,6 @@ bool isoperand(enum token tok)
 bool isunary(enum token tok)
 {
 	switch (tok) {
-	case ADD:
-	case SUB:
 	case INC:
 	case DEC:
 	case LNOT:

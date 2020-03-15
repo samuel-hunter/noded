@@ -4,35 +4,36 @@
 #include "noded.h"
 
 static const char *exprs[] = {
-	[BAD_EXPR] = "BadExpr",
+	[BAD_EXPR]     = "BadExpr",
 	[NUM_LIT_EXPR] = "NumLitExpr",
-	[PAREN_EXPR] = "ParenExpr",
-	[UNARY_EXPR] = "UnaryExpr",
-	[BINARY_EXPR] = "BinaryExpr",
-	[STORE_EXPR] = "StoreExpr"
+	[PAREN_EXPR]   = "ParenExpr",
+	[UNARY_EXPR]   = "UnaryExpr",
+	[BINARY_EXPR]  = "BinaryExpr",
+	[COND_EXPR]    = "CondExpr",
+	[STORE_EXPR]   = "StoreExpr"
 };
 
 static const char *stmts[] = {
-	[BAD_STMT] = "BadStmt",
-	[EMPTY_STMT] = "EmptyStmt",
+	[BAD_STMT]     = "BadStmt",
+	[EMPTY_STMT]   = "EmptyStmt",
 	[LABELED_STMT] = "LabeledStmt",
-	[EXPR_STMT] = "ExprStmt",
-	[BRANCH_STMT] = "BranchStmt",
-	[BLOCK_STMT] = "BlockStmt",
-	[IF_STMT] = "IfStmt",
-	[CASE_CLAUSE] = "CaseClause",
-	[SWITCH_STMT] = "SwitchStmt",
-	[LOOP_STMT] = "LoopStmt",
-	[HALT_STMT] = "HaltStmt"
+	[EXPR_STMT]    = "ExprStmt",
+	[BRANCH_STMT]  = "BranchStmt",
+	[BLOCK_STMT]   = "BlockStmt",
+	[IF_STMT]      = "IfStmt",
+	[CASE_CLAUSE]  = "CaseClause",
+	[SWITCH_STMT]  = "SwitchStmt",
+	[LOOP_STMT]    = "LoopStmt",
+	[HALT_STMT]    = "HaltStmt"
 };
 
 static const char *decls[] = {
-	[BAD_DECL] = "BadDecl",
-	[PROC_DECL] = "ProcDecl",
+	[BAD_DECL]       = "BadDecl",
+	[PROC_DECL]      = "ProcDecl",
 	[PROC_COPY_DECL] = "ProcCopyDecl",
-	[BUF_DECL] = "BufDecl",
-	[STACK_DECL] = "StackDecl",
-	[WIRE_DECL] = "WireDecl"
+	[BUF_DECL]       = "BufDecl",
+	[STACK_DECL]     = "StackDecl",
+	[WIRE_DECL]      = "WireDecl"
 };
 
 struct expr *new_expr(enum expr_type type)
@@ -90,6 +91,10 @@ static void walk_expr_(expr_func func, struct expr *e, void *dat,
 		walk_expr_(func, e->data.binary.x, dat, depth+1, order);
 		walk_expr_(func, e->data.binary.y, dat, depth+1, order);
 		break;
+	case COND_EXPR:
+		walk_expr_(func, e->data.cond.cond, dat, depth+1, order);
+		walk_expr_(func, e->data.cond.when, dat, depth+1, order);
+		walk_expr_(func, e->data.cond.otherwise, dat, depth+1, order);
 	default:
 		break; // No children here
 	}
@@ -129,8 +134,10 @@ static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
 		}
 		walk_stmt_(sfunc, efunc, s->data.if_stmt.body,
 		           dat, depth+1, order);
-		walk_stmt_(sfunc, efunc, s->data.if_stmt.otherwise,
-		           dat, depth+1, order);
+		if (s->data.if_stmt.otherwise) {
+			walk_stmt_(sfunc, efunc, s->data.if_stmt.otherwise,
+				dat, depth+1, order);
+		}
 		break;
 	case SWITCH_STMT:
 		if (efunc) {
@@ -141,14 +148,20 @@ static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
 		           dat, depth+1, order);
 		break;
 	case LOOP_STMT:
-		walk_stmt_(sfunc, efunc, s->data.loop.init,
-		           dat, depth+1, order);
+		if (s->data.loop.init) {
+			walk_stmt_(sfunc, efunc, s->data.loop.init,
+				dat, depth+1, order);
+		}
 		if (efunc) {
 			walk_expr_(efunc, s->data.loop.cond,
-			           dat, depth+1, order);
+				dat, depth+1, order);
 		}
-		walk_stmt_(sfunc, efunc, s->data.loop.post, dat, depth+1, order);
-		walk_stmt_(sfunc, efunc, s->data.loop.body, dat, depth+1, order);
+		if (s->data.loop.post) {
+			walk_stmt_(sfunc, efunc, s->data.loop.post, dat,
+				depth+1, order);
+		}
+		walk_stmt_(sfunc, efunc, s->data.loop.body, dat,
+			depth+1, order);
 		break;
 	default:
 		break; // No children here...
