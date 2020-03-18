@@ -281,9 +281,11 @@ static enum token switch4(struct scanner *s, enum token tok0, enum token tok1,
 // greater than LITERAL_MAX will mark an error in the scanner.
 void scan(struct scanner *s, struct fulltoken *dest) {
 	enum token tok = ILLEGAL;
+	struct position start;
 	// By default, set the literal empty.
 	dest->lit[0] = '\0';
 scan_again:
+	start = s->pos;
 	skip_space(s);
 	if (isalpha(s->chr)) {
 		scan_identifier(s, dest->lit);
@@ -434,6 +436,6 @@ scan_again:
 		send_error(&s->pos, ERR, "Illegal token '%s'", dest->lit);
 	}
 
-	memcpy(&dest->pos, &s->pos, sizeof(dest->pos));
+	memcpy(&dest->pos, &start, sizeof(dest->pos));
 	dest->tok = tok;
 }
