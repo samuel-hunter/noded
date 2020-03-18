@@ -90,7 +90,11 @@ void send_error(const struct position *pos, enum error_type type,
 		printf("\n");
 	} else {
 		for (int i = 0; i < pos->colno; i++) {
-			printf(" ");
+			if (line[i] == '\t') {
+				printf("\t");
+			} else {
+				printf(" ");
+			}
 		}
 		printf("^\n\n");
 	}
