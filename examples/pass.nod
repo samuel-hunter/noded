@@ -18,7 +18,7 @@ processor check {
 	// doesn't match up.
 	$in <- %in;
 	if ($mem != $in) {
-		%status <- -1; // Password mismatch!
+		%status <- 2; // Password mismatch!
 		halt;
 	}
 }
@@ -26,10 +26,10 @@ processor check {
 // Split the status into an err and ok signal
 processor split {
 	$status <- %in;
-	if ($status < 0) {
-		%err <- 1;
-	} else {
+	if ($status == 1) {
 		%ok <- 1;
+	} else {
+		%err <- 1;
 	}
 }
 

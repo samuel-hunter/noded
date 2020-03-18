@@ -21,7 +21,7 @@ processor reader {
 		}
 	} else if ($chr == '\n') {
 		if ($thereisnum) {
-			$out <- 0; // op 0 = Next Number
+			%out <- 0; // op 0 = Next Number
 			%out <- $acc;
 
 			$acc = 0;
@@ -30,7 +30,7 @@ processor reader {
 
 		%out <- 1; // op 1 = Sum them up
 	} else {
-		$out <- 2; // op 2 = User input error
+		%out <- 2; // op 2 = User input error
 		halt;
 	}
 }
