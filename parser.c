@@ -707,9 +707,9 @@ static struct stmt *parse_while_stmt(struct parser *p)
 	result = new_stmt(LOOP_STMT);
 	result->data.loop.start = keyword.pos;
 	result->data.loop.exec_body_first = false;
-	result->data.loop.init = new_stmt(EMPTY_STMT);
+	result->data.loop.init = NULL;
 	result->data.loop.cond = cond;
-	result->data.loop.post = new_stmt(EMPTY_STMT);
+	result->data.loop.post = NULL;
 	result->data.loop.body = body;
 	return result;
 }
@@ -732,9 +732,9 @@ static struct stmt *parse_do_stmt(struct parser *p)
 	result = new_stmt(LOOP_STMT);
 	result->data.loop.start = keyword.pos;
 	result->data.loop.exec_body_first = true;
-	result->data.loop.init = new_stmt(EMPTY_STMT);
+	result->data.loop.init = NULL;
 	result->data.loop.cond = cond;
-	result->data.loop.post = new_stmt(EMPTY_STMT);
+	result->data.loop.post = NULL;
 	result->data.loop.body = body;
 	return result;
 }
@@ -801,6 +801,7 @@ static struct stmt *parse_stmt(struct parser *p)
 		return result;
 	case HALT:
 		next(p);
+		expect(p, SEMICOLON, NULL);
 		result = new_stmt(HALT_STMT);
 		result->data.halt.start = p->current.pos;
 		return result;
