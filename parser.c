@@ -195,19 +195,13 @@ static uint8_t parse_number(struct parser *p)
 	}
 
 	// Handle noded-specific range errors.
-	if (val < INT8_MIN || val > UINT8_MAX) {
+	if (val < 0 || val > UINT8_MAX) {
 		send_error(&number.pos, ERR,
 		           "Value %s out of range [%d, %d]",
-		           INT8_MIN, UINT8_MAX);
+		           0, UINT8_MAX);
 	}
 
-	// Wrap the number where appropriate.
-	if (val < 0) {
-		// Convert negative values to their positive counterpart.
-		return (uint8_t) (val - INT8_MIN);
-	} else {
-		return (uint8_t) val;
-	}
+	return val;
 }
 
 // Convert a character literal into a byte value. Send an error on

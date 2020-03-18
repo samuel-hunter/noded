@@ -155,11 +155,9 @@ string_lit = `"` { ascii_char | escaped_char | byte_value } `"`
 
 ## Byte
 
-There is only one datatype: the byte, an unsigned 8-bit integer. Any
-negative constants between the inclusive range `-128 ... -1` are
-automatically wrapped to its positive counterpart by adding `256` --
-`-128` wraps to `128`, `-1` wraps to `255`, and so on. Constants
-outside the range `-128 ... 255` are considered a boundary error.
+There is only one datatype: the byte, an unsigned 8-bit
+integer. Constants outside the range `0 ... 255` are considered a
+boundary error.
 
 A byte constant can be expressed either as an integer literal or a
 character literal. Since the byte is the sole numeric data type, the

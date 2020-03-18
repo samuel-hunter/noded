@@ -89,13 +89,7 @@ processor printer {
 	$num <- %in;
 	$started = 0;
 
-	// Numbers range from -128 to 127, making our job a little easier
-
-	// Print sign if necessary
-	if ($num < 0) {
-		%out <- '-';
-		$num *= -1; // Turn $num positive
-	}
+	// Numbers range from 0 to 255, making our job a little easier
 
 	// Print hundreds digit
 	if ($num >= 100) {
