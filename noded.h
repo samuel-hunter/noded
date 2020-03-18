@@ -60,9 +60,11 @@ enum token {
 
 	INC,  // ++
 	DEC,  // --
-	LNOT, // !
 	NOT,  // ~
 
+	// All tokens from MUL to LNOT *MUST* be aligned with OP_MUL
+	// to OP_LNOT. All tokens from MUL to OR *MUST* be aligned
+	// with MUL_ASSIGN to OR_ASSIGN.
 	MUL, // *
 	DIV, // /
 	MOD, // %
@@ -72,6 +74,10 @@ enum token {
 	SHL, // <<
 	SHR, // >>
 
+	AND, // &
+	XOR, // ^
+	OR,  // |
+
 	LSS, // <
 	LTE, // <=
 	GTR, // >
@@ -80,12 +86,9 @@ enum token {
 	EQL, // ==
 	NEQ, // !=
 
-	AND, // &
-	XOR, // ^
-	OR,  // |
-
 	LAND, // &&
 	LOR,  // ||
+	LNOT, // !
 
 	COND, // ?
 
@@ -94,7 +97,6 @@ enum token {
 	MUL_ASSIGN, // *=
 	DIV_ASSIGN, // /=
 	MOD_ASSIGN, // %=
-
 	ADD_ASSIGN, // +=
 	SUB_ASSIGN, // -=
 
@@ -135,20 +137,30 @@ enum opcode {
 	OP_DUP,
 
 	OP_NEGATE,
+
+	// All opcodes from OP_MUL to OP_LNOT *MUST* be aligned with
+	// MUL to LNOT.
 	OP_MUL,
 	OP_DIV,
 	OP_MOD,
 	OP_ADD,
 	OP_SUB,
+
 	OP_SHL,
 	OP_SHR,
 
-	OP_LSS,
-	OP_GTR,
-	OP_EQL,
 	OP_AND,
 	OP_XOR,
 	OP_OR,
+
+	OP_LSS,
+	OP_LTE,
+	OP_GTR,
+	OP_GTE,
+
+	OP_EQL,
+	OP_NEQ,
+
 	OP_LAND,
 	OP_LOR,
 	OP_LNOT,
@@ -257,6 +269,7 @@ struct expr {
 		struct binary_expr {
 			struct expr *x; // left operand
 			enum token op; // operator
+			struct position oppos;
 			struct expr *y; // right operand
 		} binary;
 
@@ -296,6 +309,7 @@ struct stmt {
 		} labeled;
 
 		struct expr_stmt {
+			struct position start;
 			struct expr *x;
 		} expr;
 
@@ -437,6 +451,7 @@ struct proc_node {
 // noded.c
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...);
+bool has_errors(void);
 
 // util.c
 void *emalloc(size_t size);
@@ -507,6 +522,6 @@ struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
 void run(struct proc_node *node, void *handler_dat);
 
 // compiler.c
-uint8_t *compile(const struct proc_decl *s, size_t *len);
+uint8_t *compile(const struct proc_decl *s, uint16_t *n);
 
 #endif /* NODED_H */

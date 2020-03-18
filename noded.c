@@ -56,6 +56,11 @@ void send_error(const struct position *pos, enum error_type type,
 	}
 }
 
+bool has_errors(void)
+{
+	return Globals.errors > 0;
+}
+
 static void print_usage(const char *prog_name)
 {
 	fprintf(stderr, "Usage: %s [FILE]\n", prog_name);
@@ -90,6 +95,7 @@ static char *read_all(FILE *f, size_t *n)
 	return result;
 }
 
+/*
 static void indent(int depth)
 {
 	for (int i = 0; i < depth; i++) {
@@ -230,6 +236,7 @@ static void count_decl_size(struct decl *d, void *dat)
 	size_t *counted = (size_t*)dat;
 	*counted += sizeof(*d);
 }
+*/
 
 int main(int argc, char **argv)
 {
@@ -253,9 +260,6 @@ int main(int argc, char **argv)
 		f = stdin;
 	}
 
-	printf("Expr size: %lu\nStmt size: %lu\nDecl size: %lu\n",
-	       sizeof(struct expr), sizeof(struct stmt), sizeof(struct decl));
-
 	src = read_all(f, &src_size);
 	if (src == NULL) {
 		if (ferror(f)) {
@@ -268,8 +272,7 @@ int main(int argc, char **argv)
 	// Scan the file token-by-token
 	init_parser(&parser, src, src_size);
 
-	size_t tree_size = 0;
-
+	/*
 	while (!parser_eof(&parser)) {
 		struct decl *decl = parse_decl(&parser);
 		if (Globals.errors) return 1;
@@ -280,9 +283,21 @@ int main(int argc, char **argv)
 		          decl, &tree_size, PARENT_FIRST);
 		free_decl(decl);
 	}
+	*/
 
-	printf("\nTotal AST size: %lu\n", tree_size);
-	printf("Dict size: %lu\n", dict_size(&parser.dict));
+	struct decl *decl = parse_decl(&parser);
+	if (decl->type != PROC_DECL) {
+		fprintf(stderr, "Expected proc decl\n");
+		return 1;
+	}
+
+	uint16_t codesize;
+	uint8_t *code = compile(&decl->data.proc, &codesize);
+	if (code == NULL) {
+		return 1;
+	} else {
+		fwrite(code, sizeof(*code), codesize, stdout);
+	}
 
 	return 0;
 }

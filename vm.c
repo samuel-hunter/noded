@@ -108,17 +108,6 @@ void run(struct proc_node *node, void *handler_dat)
 			val2 = pop(node); val1 = pop(node);
 			push(node, val1>>val2);
 			break;
-		case OP_LSS:
-			val2 = pop(node); val1 = pop(node);
-			push(node, val1 < val2 ? 1 : 0);
-			break;
-		case OP_GTR:
-			val2 = pop(node); val1 = pop(node);
-			push(node, val1 > val2 ? 1 : 0);
-			break;
-		case OP_EQL:
-			push(node, pop(node) == pop(node) ? 1 : 0);
-			break;
 		case OP_AND:
 			push(node, pop(node)&pop(node));
 			break;
@@ -127,6 +116,28 @@ void run(struct proc_node *node, void *handler_dat)
 			break;
 		case OP_OR:
 			push(node, pop(node)|pop(node));
+			break;
+		case OP_LSS:
+			val2 = pop(node); val1 = pop(node);
+			push(node, val1 < val2 ? 1 : 0);
+			break;
+		case OP_LTE:
+			val2 = pop(node); val1 = pop(node);
+			push(node, val1 <= val2 ? 1 : 0);
+			break;
+		case OP_GTR:
+			val2 = pop(node); val1 = pop(node);
+			push(node, val1 > val2 ? 1 : 0);
+			break;
+		case OP_GTE:
+			val2 = pop(node); val1 = pop(node);
+			push(node, val1 >= val2 ? 1 : 0);
+			break;
+		case OP_EQL:
+			push(node, pop(node) == pop(node) ? 1 : 0);
+			break;
+		case OP_NEQ:
+			push(node, pop(node) != pop(node) ? 1 : 0);
 			break;
 		case OP_LAND:
 			val2 = pop(node); val1 = pop(node);
@@ -197,6 +208,8 @@ void run(struct proc_node *node, void *handler_dat)
 			break;
 		case OP_HALT:
 			return;
+		default:
+			errx(1, "Unknown opcode %d.", instr);
 		}
 
 		node->isp += advance;

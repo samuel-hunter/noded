@@ -2,7 +2,7 @@
 .SUFFIXES:
 
 TARGET := noded
-OBJECTS := noded.o token.o scanner.o ast.o dict.o parser.o util.o vm.o
+OBJECTS := noded.o token.o scanner.o ast.o dict.o parser.o util.o vm.o compiler.o
 
 # Compiled files that aren't part of the main program, like testing binaries.
 OTHER_BINS := test-vm

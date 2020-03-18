@@ -440,6 +440,7 @@ static struct expr *parse_binary_expr(struct parser *p, int prec)
 {
 	struct expr *x; // left-hand expression
 	enum token op;
+	struct position oppos;
 	struct expr *y; // right-hand expression
 
 	struct expr *tmp;
@@ -456,6 +457,7 @@ static struct expr *parse_binary_expr(struct parser *p, int prec)
 	if (isltr(p->current.tok)) {
 		while (precedence(p->current.tok) == prec) {
 			op = p->current.tok;
+			oppos = p->current.pos;
 			next(p); // Consume operator.
 
 			if (prec == HIGHEST_PREC) {
@@ -469,6 +471,7 @@ static struct expr *parse_binary_expr(struct parser *p, int prec)
 			tmp = new_expr(BINARY_EXPR);
 			tmp->data.binary.x = x;
 			tmp->data.binary.op = op;
+			tmp->data.binary.oppos = oppos;
 			tmp->data.binary.y = y;
 
 			x = tmp;
@@ -476,6 +479,7 @@ static struct expr *parse_binary_expr(struct parser *p, int prec)
 	} else {
 		while (precedence(p->current.tok) == prec) {
 			op = p->current.tok;
+			oppos = p->current.pos;
 			next(p); // Consume operator.
 
 			if (op == COND) {
@@ -499,6 +503,7 @@ static struct expr *parse_binary_expr(struct parser *p, int prec)
 				tmp = new_expr(BINARY_EXPR);
 				tmp->data.binary.x = x;
 				tmp->data.binary.op = op;
+				tmp->data.binary.oppos = oppos;
 				tmp->data.binary.y = y;
 
 				x = tmp;
@@ -536,6 +541,7 @@ static struct stmt *parse_labeled_stmt(struct parser *p)
 
 static struct stmt *parse_expr_stmt(struct parser *p)
 {
+	struct position start = p->current.pos;
 	struct expr *expr;
 	struct stmt *result;
 
@@ -543,6 +549,7 @@ static struct stmt *parse_expr_stmt(struct parser *p)
 	expect(p, SEMICOLON, NULL);
 
 	result = new_stmt(EXPR_STMT);
+	result->data.expr.start = start;
 	result->data.expr.x = expr;
 	return result;
 }
