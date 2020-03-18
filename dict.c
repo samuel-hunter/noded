@@ -6,6 +6,7 @@
 // most of that space was from storing 1KB literal buffers. Right
 // after implementing it, the allocation space shrunk to 17KB+409B
 // (409B coming from the dict itself).
+#include <stdlib.h>
 #include <string.h>
 
 #include "noded.h"
@@ -39,8 +40,7 @@ size_t sym_id(struct symdict *dict, const char *sym)
 		expand(dict);
 
 	size_t result = dict->len++;
-	dict->syms[result] = emalloc(strlen(sym)+1); // +1 for null terminator
-	strcpy(dict->syms[result], sym);
+	dict->syms[result] = strdup(sym);
 
 	return result;
 }
@@ -60,4 +60,14 @@ size_t dict_size(const struct symdict *dict)
 	}
 
 	return result;
+}
+
+void clear_dict(struct symdict *dict)
+{
+	for (size_t i = 0; i < dict->len; i++) {
+		free(dict->syms[i]);
+	}
+
+	free(dict->syms);
+	memset(dict, 0, sizeof(*dict));
 }

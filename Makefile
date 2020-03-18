@@ -8,7 +8,7 @@ OBJECTS := noded.o token.o scanner.o ast.o dict.o parser.o util.o vm.o compiler.
 OTHER_BINS := test-vm disasm
 OTHER_OBJS := test-vm.o disasm.o
 
-CFLAGS := -g --std=c99 -Werror -Wall -Wextra -Wpedantic -O0
+CFLAGS := -g --std=c99 -Werror -Wall -Wextra -Wpedantic -D_DEFAULT_SOURCE
 LDLIBS :=
 
 default: $(TARGET)

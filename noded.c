@@ -185,6 +185,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, "WARN %s: Zero size file.\n", Globals.filename);
 		}
 	}
+	fclose(f);
 
 	// Scan the file token-by-token
 	init_parser(&parser, Globals.src, src_size);
@@ -201,10 +202,17 @@ int main(int argc, char **argv)
 
 	uint16_t codesize;
 	uint8_t *code = compile(&decl->data.proc, &codesize);
+
+	// free the AST and code, since we no longer need it.
+	free_decl(decl);
+	clear_parser(&parser);
+	free(Globals.src);
+
 	if (code == NULL || has_errors()) {
 		return 1;
 	} else {
 		fwrite(code, sizeof(*code), codesize, stdout);
+		free(code);
 	}
 
 	return 0;

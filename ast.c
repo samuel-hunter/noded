@@ -213,6 +213,9 @@ static void free_stmt_helper(struct stmt *s, void *dat, int depth)
 	(void)dat;
 	(void)depth;
 
+	if (s->type == BLOCK_STMT)
+		free(s->data.block.stmt_list);
+
 	free(s);
 }
 

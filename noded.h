@@ -216,7 +216,7 @@ struct fulltoken {
 };
 
 struct scanner {
-	const char *src;
+	const char *src; // not owned by the struct
 	size_t src_len;
 
 	char chr;      // Current character
@@ -479,6 +479,7 @@ void scan(struct scanner *scanner, struct fulltoken *dest);
 size_t sym_id(struct symdict *dict, const char *sym);
 const char *id_sym(const struct symdict *dict, size_t id);
 size_t dict_size(const struct symdict *dict);
+void clear_dict(struct symdict *dict);
 
 // ast.c
 struct expr *new_expr(enum expr_type type);
@@ -495,7 +496,7 @@ typedef void (*decl_func)(struct decl *, void *);
 
 enum call_order {
 	PARENT_FIRST, // Handle parent nodes before child nodes
-	CHILD_FIRST    // Vice versa
+	CHILD_FIRST   // Vice versa
 };
 
 void walk_expr(expr_func func, struct expr *e, void *dat,
@@ -515,6 +516,7 @@ void init_parser(struct parser *parser,
 	const char src[], size_t src_len);
 bool parser_eof(const struct parser *parser);
 struct decl *parse_decl(struct parser *parser);
+void clear_parser(struct parser *parser);
 
 // vm.c
 struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,

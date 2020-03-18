@@ -46,6 +46,11 @@ void init_parser(struct parser *parser,
 	next(parser); // Populate our token buffer.
 }
 
+void clear_parser(struct parser *parser)
+{
+	clear_dict(&parser->dict);
+}
+
 bool parser_eof(const struct parser *parser)
 {
 	return parser->current.tok == TOK_EOF;
