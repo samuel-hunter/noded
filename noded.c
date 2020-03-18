@@ -1,7 +1,7 @@
-#include <ctype.h> // isgraph
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <err.h>
 
 #include "noded.h"
@@ -9,16 +9,45 @@
 static struct globals {
 	const char *filename;
 	size_t errors;
+	char *src;
 } Globals = {0};
 
 // Number of errors before the parser panics.
 static const size_t max_errors = 10;
 
+// Return the start of the line.
+static const char *strline(int lineno)
+{
+	int cur = 1; // current line
+	char *src = Globals.src;
+	while (cur < lineno) {
+		if (*src == '\0') {
+			// This shouldn't happen unless the program
+			// has a bug. While I would normally crash and
+			// exit, this is only for `send_error`, so
+			// printing a NULL is fine enough.
+			return NULL;
+		}
+
+		if (*src++ == '\n')
+			cur++;
+	}
+
+	return src;
+}
+
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...)
 {
+	// 512 should be reasonable enough.
+#define LINESIZE 512
+#define S_LINESIZE "509"
 	va_list ap;
 	const char *typestr;
+
+	const char *line;
+	char linebuf[LINESIZE + 1];
+	size_t line_length;
 
 	switch (type) {
 	case WARN:
@@ -36,11 +65,35 @@ void send_error(const struct position *pos, enum error_type type,
 	fprintf(stderr, "%s %s:%d:%d: ", typestr,
 	        Globals.filename, pos->lineno, pos->colno);
 
+	// Copy the line (up to but excluding the newline).
+	line = strline(pos->lineno);
+	line_length = (size_t)(
+		(strchr(line, '\n') ? strchr(line, '\n') : strchr(line, '\000')) - line);
+	if (line_length > LINESIZE) {
+		sprintf(linebuf, "%"S_LINESIZE"s...", line);
+	} else {
+		strncpy(linebuf, line, line_length);
+		linebuf[line_length] = '\000';
+	}
+
+	// Print the error
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
-
 	fprintf(stderr, ".\n");
+
+	// Print the offending line and a caret to its column
+	printf("%s\n", linebuf);
+
+	if (line[pos->colno] == '\n') {
+		// Error at end of line; don't post caret
+		printf("\n");
+	} else {
+		for (int i = 0; i < pos->colno; i++) {
+			printf(" ");
+		}
+		printf("^\n\n");
+	}
 
 	// Send an exit depending on fatality.
 	switch (type) {
@@ -54,6 +107,8 @@ void send_error(const struct position *pos, enum error_type type,
 		exit(1);
 		break;
 	}
+#undef S_LINESIZE
+#undef LINESIZE
 }
 
 bool has_errors(void)
@@ -85,6 +140,12 @@ static char *read_all(FILE *f, size_t *n)
 		nread += fread(&result[nread], 1, size-nread, f);
 	}
 
+	// Add a null terminator.
+	if (nread == size) {
+		result = erealloc(result, ++size);
+	}
+	result[size-1] = '\000';
+
 	*n = nread;
 	if (ferror(f) || nread == 0) {
 		free(result);
@@ -95,154 +156,10 @@ static char *read_all(FILE *f, size_t *n)
 	return result;
 }
 
-/*
-static void indent(int depth)
-{
-	for (int i = 0; i < depth; i++) {
-		printf("\t");
-	}
-}
-
-static void print_expr(struct expr *e, void *dat, int depth)
-{
-	struct symdict *dict = (struct symdict *)dat;
-
-	indent(depth);
-	switch (e->type) {
-	case NUM_LIT_EXPR:
-		printf("%s %d\n", strexpr(e), e->data.num_lit.value);
-		break;
-	case UNARY_EXPR:
-		printf("%s (%s) (suffix=%d)\n", strexpr(e),
-		       strtoken(e->data.unary.op), e->data.unary.is_suffix);
-		break;
-	case BINARY_EXPR:
-		printf("%s (%s)\n", strexpr(e), strtoken(e->data.binary.op));
-		break;
-	case STORE_EXPR:
-		printf("%s (%s, %s)\n", strexpr(e),
-		       strtoken(e->data.store.kind), id_sym(dict, e->data.store.name_id));
-		break;
-	default:
-		puts(strexpr(e));
-	}
-}
-
-static void print_stmt(struct stmt *s, void *dat, int depth)
-{
-	struct symdict *dict = (struct symdict *)dat;
-
-	indent(depth);
-	switch (s->type) {
-	case LABELED_STMT:
-		printf("%s %s\n", strstmt(s),
-		       id_sym(dict, s->data.labeled.label_id));
-		break;
-	case BRANCH_STMT:
-		printf("%s %s %s\n", strstmt(s),
-		       strtoken(s->data.branch.tok),
-		       id_sym(dict, s->data.branch.label_id));
-		break;
-	case CASE_CLAUSE:
-		printf("%s ", strstmt(s));
-		if (s->data.case_clause.is_default) {
-			printf("default\n");
-		} else {
-			printf("case %d\n", s->data.case_clause.x);
-		}
-		break;
-	case LOOP_STMT:
-		printf("%s (do=%s)\n", strstmt(s),
-		       s->data.loop.exec_body_first ? "yes" : "no");
-		break;
-	default:
-		puts(strstmt(s));
-	}
-}
-
-
-static void print_array(uint8_t data[], size_t len)
-{
-	printf("{");
-	for (size_t i = 0; i < len; i++) {
-		char c = data[i];
-
-		// Try to show the printable character, but fall back
-		// to a hex value.
-		if (isgraph(c) || c == ' ') {
-			printf("'%c'", c);
-		} else {
-			printf("0x%02x", data[i]);
-		}
-
-		if (i + 1 < len) {
-			printf(", ");
-		}
-	}
-	printf("}\n");
-}
-
-static void print_decl(struct decl *d, void *dat)
-{
-	struct symdict *dict = (struct symdict *)dat;
-
-	switch (d->type) {
-	case PROC_DECL:
-		printf("%s %s\n", strdecl(d),
-		       id_sym(dict, d->data.proc.name_id));
-		break;
-	case PROC_COPY_DECL:
-		printf("%s %s = %s\n", strdecl(d),
-		       id_sym(dict, d->data.proc_copy.name_id),
-		       id_sym(dict, d->data.proc_copy.source_id));
-		break;
-	case BUF_DECL:
-		printf("%s %s =\n\t", strdecl(d),
-		       id_sym(dict, d->data.buf.name_id));
-		print_array(d->data.buf.data, d->data.buf.len);
-		break;
-	case STACK_DECL:
-		printf("%s %s\n", strdecl(d),
-		       id_sym(dict, d->data.stack.name_id));
-		break;
-	case WIRE_DECL:
-		printf("%s %s.%s -> %s.%s\n", strdecl(d),
-		       id_sym(dict, d->data.wire.source.node_id),
-		       id_sym(dict, d->data.wire.source.name_id),
-		       id_sym(dict, d->data.wire.dest.node_id),
-		       id_sym(dict, d->data.wire.dest.name_id));
-		break;
-	default:
-		puts(strdecl(d));
-	}
-}
-
-static void count_expr_size(struct expr *e, void *dat, int depth)
-{
-	(void)depth;
-	size_t *counted = (size_t*)dat;
-	*counted += sizeof(*e);
-}
-
-static void count_stmt_size(struct stmt *s, void *dat, int depth)
-{
-	(void)depth;
-	size_t *counted = (size_t*)dat;
-	*counted += sizeof(*s);
-}
-
-static void count_decl_size(struct decl *d, void *dat)
-{
-	size_t *counted = (size_t*)dat;
-	*counted += sizeof(*d);
-}
-*/
-
 int main(int argc, char **argv)
 {
 	FILE *f;
 
-	char *src;
 	size_t src_size;
 	struct parser parser;
 
@@ -260,8 +177,8 @@ int main(int argc, char **argv)
 		f = stdin;
 	}
 
-	src = read_all(f, &src_size);
-	if (src == NULL) {
+	Globals.src = read_all(f, &src_size);
+	if (Globals.src == NULL) {
 		if (ferror(f)) {
 			errx(1, "%s: I/O Error.", Globals.filename);
 		} else {
@@ -270,22 +187,13 @@ int main(int argc, char **argv)
 	}
 
 	// Scan the file token-by-token
-	init_parser(&parser, src, src_size);
-
-	/*
-	while (!parser_eof(&parser)) {
-		struct decl *decl = parse_decl(&parser);
-		if (Globals.errors) return 1;
-
-		walk_decl(&print_decl, &print_stmt, &print_expr,
-		          decl, &parser.dict, PARENT_FIRST);
-		walk_decl(&count_decl_size, &count_stmt_size, &count_expr_size,
-		          decl, &tree_size, PARENT_FIRST);
-		free_decl(decl);
-	}
-	*/
+	init_parser(&parser, Globals.src, src_size);
 
 	struct decl *decl = parse_decl(&parser);
+	if (has_errors()) {
+		return 1;
+	}
+
 	if (decl->type != PROC_DECL) {
 		fprintf(stderr, "Expected proc decl\n");
 		return 1;
@@ -293,7 +201,7 @@ int main(int argc, char **argv)
 
 	uint16_t codesize;
 	uint8_t *code = compile(&decl->data.proc, &codesize);
-	if (code == NULL) {
+	if (code == NULL || has_errors()) {
 		return 1;
 	} else {
 		fwrite(code, sizeof(*code), codesize, stdout);
