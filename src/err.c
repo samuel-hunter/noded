@@ -64,20 +64,20 @@ void vprint_error(const char *srcname, const char *src, const struct position *p
 	line = strline(src, pos->lineno);
 	line_length = (size_t)(
 		(strchr(line, '\n') ? strchr(line, '\n') : strchr(line, '\000')) - line);
-	fwrite(line, sizeof(*line), line_length, stdout);
-	printf("\n");
+	fwrite(line, sizeof(*line), line_length, stderr);
+	fprintf(stderr, "\n");
 
 	if (line[pos->colno] == '\n') {
 		// Error at end of line; don't post caret
-		printf("\n");
+		fprintf(stderr, "\n");
 	} else {
 		for (int i = 0; i < pos->colno; i++) {
 			if (line[i] == '\t') {
-				printf("\t");
+				fprintf(stderr, "\t");
 			} else {
-				printf(" ");
+				fprintf(stderr, " ");
 			}
 		}
-		printf("^\n");
+		fprintf(stderr, "^\n");
 	}
 }
