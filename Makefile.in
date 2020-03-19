@@ -1,0 +1,24 @@
+.POSIX:
+.SUFFIXES:
+
+TARGET = noded
+RM ?= rm -f
+
+CC = @@CC@@
+CFLAGS = @@CFLAGS@@ -Iinclude
+LDFLAGS = @@LDFLAGS@@
+
+TOOLS = @@TOOLS@@
+TESTS = @@TESTS@@
+
+default: noded
+all: noded tools
+
+tools: $(TOOLS)
+
+include build.make
+
+clean:
+	$(RM) $(TARGET) $(TOOLS) $(TESTS) $(OBJECTS) $(OTHER_OBJS)
+
+.PHONY: default all tools test clean

@@ -1,6 +1,10 @@
 # object files
 *.o
 
+# Generated files
+Makefile
+build.make
+
 # binaries
 /noded
 /disasm
