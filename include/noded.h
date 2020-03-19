@@ -1,6 +1,7 @@
 #ifndef NODED_H
 #define NODED_H
 
+#include <stdarg.h>
 #include <stdbool.h> // bool
 #include <stddef.h> // size_t
 #include <stdint.h> // UINT8_MAX
@@ -448,10 +449,14 @@ struct proc_node {
 	uint8_t mem[PROC_VARS];
 };
 
-// noded.c
+// noded.c (or friends)
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...);
 bool has_errors(void);
+
+// err.c
+void vprint_error(const char *srcname, const char *src, const struct position *pos,
+	enum error_type type, const char *fmt, va_list ap);
 
 // util.c
 void *emalloc(size_t size);

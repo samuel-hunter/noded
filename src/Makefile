@@ -2,7 +2,7 @@
 .SUFFIXES:
 
 TARGET := ../noded
-OBJECTS := noded.o token.o scanner.o ast.o dict.o parser.o util.o vm.o compiler.o
+OBJECTS := noded.o err.o token.o scanner.o ast.o dict.o parser.o util.o vm.o compiler.o
 
 include ../global.make
 

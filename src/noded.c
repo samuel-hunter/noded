@@ -15,78 +15,16 @@ static struct globals {
 // Number of errors before the parser panics.
 static const size_t max_errors = 10;
 
-// Return the start of the line.
-static const char *strline(int lineno)
-{
-	int cur = 1; // current line
-	char *src = Globals.src;
-	while (cur < lineno) {
-		if (*src == '\0') {
-			// This shouldn't happen unless the program
-			// has a bug. While I would normally crash and
-			// exit, this is only for `send_error`, so
-			// printing a NULL is fine enough.
-			return NULL;
-		}
-
-		if (*src++ == '\n')
-			cur++;
-	}
-
-	return src;
-}
-
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...)
 {
 	va_list ap;
-	const char *typestr;
-
-	const char *line;
-	size_t line_length;
-
-	switch (type) {
-	case WARN:
-		typestr = "WARN";
-		break;
-	case ERR:
-		typestr = "ERR";
-		break;
-	case FATAL:
-		typestr = "FATAL";
-		break;
-	}
-
-	fflush(stdout); // Flush stdout so that it doesn't mangle with stderr.
-	fprintf(stderr, "%s %s:%d:%d: ", typestr,
-	        Globals.filename, pos->lineno, pos->colno);
 
 	// Print the error
 	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
+	vprint_error(Globals.filename, Globals.src, pos,
+		type, fmt, ap);
 	va_end(ap);
-	fprintf(stderr, ".\n");
-
-	// Print the offending line and a caret to its column
-	line = strline(pos->lineno);
-	line_length = (size_t)(
-		(strchr(line, '\n') ? strchr(line, '\n') : strchr(line, '\000')) - line);
-	fwrite(line, sizeof(*line), line_length, stdout);
-	printf("\n");
-
-	if (line[pos->colno] == '\n') {
-		// Error at end of line; don't post caret
-		printf("\n");
-	} else {
-		for (int i = 0; i < pos->colno; i++) {
-			if (line[i] == '\t') {
-				printf("\t");
-			} else {
-				printf(" ");
-			}
-		}
-		printf("^\n\n");
-	}
 
 	// Send an exit depending on fatality.
 	switch (type) {
