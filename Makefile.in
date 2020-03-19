@@ -8,9 +8,6 @@ CC = @@CC@@
 CFLAGS = @@CFLAGS@@ -Iinclude
 LDFLAGS = @@LDFLAGS@@
 
-TOOLS = @@TOOLS@@
-TESTS = @@TESTS@@
-
 default: noded
 all: noded tools
 

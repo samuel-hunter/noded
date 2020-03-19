@@ -58,10 +58,7 @@ echo "LDFLAGS=$LDFLAGS"
 sed "
 s|@@CC@@|$CC|g;
 s|@@CFLAGS@@|$CFLAGS|g;
-s|@@LDFLAGS@@|$LDFLAGS|g;
-
-s|@@TOOLS@@|$tools|g;
-s|@@TESTS@@|$tests|g
+s|@@LDFLAGS@@|$LDFLAGS|g
 " < Makefile.in > Makefile
 
 src () {
