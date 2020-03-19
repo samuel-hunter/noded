@@ -6,12 +6,14 @@ set -e
 [ -z "$CFLAGS" ] && CFLAGS="--std=c99 -Werror -Wall -Wextra -Wpedantic -D_DEFAULT_SOURCE"
 [ -z "$LDFLAGS" ] && LDFLAGS=""
 
+includes="include/noded.h test/vm-framework.h"
+
 bins () {
     mktarget src/noded src/err src/token src/scanner src/ast \
              src/dict src/parser src/util src/vm src/compiler
     mktool disasm
-    mktest test-vm src/vm src/util
-    mktest test-compiler src/err src/token src/scanner src/ast \
+    mktest test-vm test/vm-framework src/vm src/util
+    mktest test-compiler test/vm-framework src/err src/token src/scanner src/ast \
            src/dict src/parser src/util src/vm src/compiler
 }
 
@@ -171,7 +173,7 @@ mktest () {
 }
 
 for obj in `bins | sort -u | inline`; do
-    printf '%s: %s\n' `obj $obj` `src $obj`
+    printf '%s: %s %s\n' `obj $obj` `src $obj` "$includes"
     printf '\t$(CC) $(CFLAGS) -o $@ -c %s\n' `src $obj`
 done >> build.make
 

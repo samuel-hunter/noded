@@ -5,20 +5,13 @@
 #include <string.h>
 
 #include "noded.h"
+#include "vm-framework.h"
 
 struct compiler_test {
 	const char *name;
 	const char *src;
 
-	struct test_port {
-		const uint8_t *send;
-		size_t send_len;
-		size_t send_idx;
-
-		const uint8_t *recv;
-		size_t recv_len;
-		size_t recv_idx;
-	} ports[PROC_PORTS];
+	struct test_port ports[PROC_PORTS];
 };
 
 static struct {
@@ -47,42 +40,11 @@ bool has_errors(void)
 	return Globals.has_error;
 }
 
-static void send(uint8_t val, int porti, void *dat)
-{
-	struct compiler_test *test = (struct compiler_test *)dat;
-	struct test_port *port = &test->ports[porti];
-
-	printf("Port%d -> %d\n", porti, val);
-
-	if (port->send_idx == port->send_len)
-		errx(1, "Too many messages from port %d "
-		        "(expected only %lu messages)", porti, port->send_len);
-
-	if (port->send[port->send_idx++] != val)
-		errx(1, "Expected %d from port %d, but received %d",
-		     port->send[port->send_idx-1], porti, val);
-}
-
-static uint8_t recv(int porti, void *dat)
-{
-	struct compiler_test *test = (struct compiler_test *)dat;
-	struct test_port *port = &test->ports[porti];
-
-	if (port->recv_idx == port->recv_len)
-		errx(1, "Too many messages requested from port %d "
-		        "(expected only %lu messages)", porti, port->recv_len);
-
-	uint8_t result = port->recv[port->recv_idx++];
-	printf("Port%d <- %d\n", porti, result);
-	return result;
-}
-
 static void test_compiler(struct compiler_test *test)
 {
 	struct parser parser;
 	struct decl *decl;
-	uint16_t code_size;
-	uint8_t *code;
+	struct vm_test vmtest;
 
 	Globals.cur = test;
 
@@ -98,34 +60,18 @@ static void test_compiler(struct compiler_test *test)
 		exit(1);
 	}
 
-	code = compile(&decl->data.proc, &code_size);
-	if (has_errors() || code == NULL) {
+	vmtest.code = compile(&decl->data.proc, &vmtest.code_size);
+	if (has_errors() || vmtest.code == NULL) {
 		exit(1);
 	}
 
-	struct proc_node *node =
-		new_proc_node(code, code_size, &send, &recv);
-	run(node, test);
-
-	// Make sure *all* messages were sent and received
-	for (size_t i = 0; i < PROC_PORTS; i++) {
-		struct test_port *port = &test->ports[i];
-		if (port->send_idx != port->send_len) {
-			errx(1, "Expected %lu messages to be sent to port %lu, "
-			     "but found only %lu.", port->send_len, i,
-				port->send_idx);
-		}
-
-		if (port->recv_idx != port->recv_len) {
-			errx(1, "Expected %lu messages to be received to "
-			     "port %lu, but found only %lu.",
-			     port->recv_len, i, port->recv_idx);
-		}
-	}
+	vmtest.name = test->name;
+	for (int i = 0; i < PROC_PORTS; i++)
+		vmtest.ports[i] = test->ports[i];
+	test_code(&vmtest);
 
 	// Free all constructs.
-	free_proc_node(node);
-	free(code);
+	free(vmtest.code);
 	free_decl(decl);
 
 	printf("OK\n\n");
@@ -152,6 +98,6 @@ int main(void)
 	};
 	test_compiler(&test_if);
 
-	printf("Looks good!\n");
+	printf("LGTM\n");
 	return 0;
 }
