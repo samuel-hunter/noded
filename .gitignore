@@ -4,7 +4,4 @@
 # binaries
 /noded
 /disasm
-
-# Test binaries (make sure not to exclude the .c files!)
-/test/test-*
-!/test/test-*.c
+/test-*
