@@ -2,9 +2,9 @@
 *.o
 
 # binaries
-noded
-disasm
+/noded
+/disasm
 
 # Test binaries (make sure not to exclude the .c files!)
-test-*
-!test-*.c
+/test/test-*
+!/test/test-*.c

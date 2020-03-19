@@ -2,33 +2,23 @@
 .SUFFIXES:
 
 TARGET := noded
-OBJECTS := noded.o token.o scanner.o ast.o dict.o parser.o util.o vm.o compiler.o
-
-# Compiled files that aren't part of the main program, like testing binaries.
-OTHER_BINS := test-vm disasm
-OTHER_OBJS := test-vm.o disasm.o
-
-CFLAGS := -g --std=c99 -Werror -Wall -Wextra -Wpedantic -D_DEFAULT_SOURCE
-LDLIBS :=
 
 default: $(TARGET)
-all: $(TARGET) $(OTHER_BINS)
+all: $(TARGET) tools
 
-$(TARGET): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+$(TARGET):
+	$(MAKE) -C src ../$(TARGET)
 
-test-vm: util.o vm.o test-vm.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+tools:
+	$(MAKE) -C tools all
 
-disasm: disasm.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
-.c.o: noded.h
-	$(CC) $(CFLAGS) -c $<
+test:
+	$(MAKE) -C test test-all
 
 clean:
-	$(RM) $(TARGET) $(OBJECTS) $(OTHER_BINS) $(OTHER_OBJS)
+	$(MAKE) -C src clean
+	$(MAKE) -C tools clean
+	$(MAKE) -C test clean
 
-
-.PHONY: all default clean
+.PHONY: default all tools test clean
 .SUFFIXES: .c .o
