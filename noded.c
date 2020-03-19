@@ -39,14 +39,10 @@ static const char *strline(int lineno)
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...)
 {
-	// 512 should be reasonable enough.
-#define LINESIZE 512
-#define S_LINESIZE "509"
 	va_list ap;
 	const char *typestr;
 
 	const char *line;
-	char linebuf[LINESIZE + 1];
 	size_t line_length;
 
 	switch (type) {
@@ -65,17 +61,6 @@ void send_error(const struct position *pos, enum error_type type,
 	fprintf(stderr, "%s %s:%d:%d: ", typestr,
 	        Globals.filename, pos->lineno, pos->colno);
 
-	// Copy the line (up to but excluding the newline).
-	line = strline(pos->lineno);
-	line_length = (size_t)(
-		(strchr(line, '\n') ? strchr(line, '\n') : strchr(line, '\000')) - line);
-	if (line_length > LINESIZE) {
-		sprintf(linebuf, "%"S_LINESIZE"s...", line);
-	} else {
-		strncpy(linebuf, line, line_length);
-		linebuf[line_length] = '\000';
-	}
-
 	// Print the error
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
@@ -83,7 +68,11 @@ void send_error(const struct position *pos, enum error_type type,
 	fprintf(stderr, ".\n");
 
 	// Print the offending line and a caret to its column
-	printf("%s\n", linebuf);
+	line = strline(pos->lineno);
+	line_length = (size_t)(
+		(strchr(line, '\n') ? strchr(line, '\n') : strchr(line, '\000')) - line);
+	fwrite(line, sizeof(*line), line_length, stdout);
+	printf("\n");
 
 	if (line[pos->colno] == '\n') {
 		// Error at end of line; don't post caret
@@ -111,8 +100,6 @@ void send_error(const struct position *pos, enum error_type type,
 		exit(1);
 		break;
 	}
-#undef S_LINESIZE
-#undef LINESIZE
 }
 
 bool has_errors(void)
