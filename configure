@@ -6,6 +6,15 @@ set -e
 [ -z "$CFLAGS" ] && CFLAGS="--std=c99 -Werror -Wall -Wextra -Wpedantic -D_DEFAULT_SOURCE"
 [ -z "$LDFLAGS" ] && LDFLAGS=""
 
+bins () {
+    mktarget src/noded src/err src/token src/scanner src/ast \
+             src/dict src/parser src/util src/vm src/compiler
+    mktool disasm
+    mktest test-vm src/vm src/util
+    mktest test-compiler src/err src/token src/scanner src/ast \
+           src/dict src/parser src/util src/vm src/compiler
+}
+
 for i in "$@"; do
     case $1 in
         CC=*)
@@ -41,61 +50,7 @@ EOF
     esac
 done
 
-objects="src/noded src/err src/token src/scanner src/ast src/dict src/parser src/util src/vm src/compiler tools/disasm test/test-vm test/test-compiler"
-tools="disasm"
-tests="test-vm test-compiler"
-
-src () {
-    printf "%s.c" "$1"
-}
-
-obj () {
-    printf "build/%s.o" "${1#*/}"
-}
-
-print_objs () {
-    for i in "$@"; do
-        printf "%s " `obj $i`
-    done
-}
-
-make_bin () {
-    name="$1"
-    shift
-
-    printf '%s: %s\n' "$name" "`print_objs "$@"`"
-    printf '\t$(CC) $(LDFLAGS) -o $@ %s$(LDLIBS)\n\n' "`print_objs "$@"`"
-}
-
-make_tool () {
-    name="$1"
-    shift
-    make_bin "$name" "tools/$name" "$@"
-}
-
-make_testcmd () {
-    printf 'test: $(TESTS)\n'
-    for test in $tests; do
-        printf '\t./%s\n' $test
-    done
-    printf '\n'
-}
-
-make_test () {
-    name="$1"
-    shift
-    make_bin "$name" "test/$name" "$@"
-}
-
-make_deps () {
-    printf '# Dependencies\n\n'
-    for i in $objects; do
-        printf '%s: %s\n' `obj $i` `src $i`
-        printf '\t@mkdir -p build\n'
-        printf '\t$(CC) $(CFLAGS) -o $@ -c %s\n' `src $i`
-    done
-}
-
+# Create the main Makefile
 echo "Prefix: $PREFIX"
 echo "CC=$CC"
 echo "CFLAGS=$CFLAGS"
@@ -109,16 +64,118 @@ s|@@TOOLS@@|$tools|g;
 s|@@TESTS@@|$tests|g
 " < Makefile.in > Makefile
 
-rm -f build.make
-printf "OBJECTS = %s\n\n" "`print_objs $objects`" > build.make
-make_bin noded src/noded src/err src/token src/scanner src/ast \
-         src/dict src/parser src/util src/vm src/compiler >> build.make
-make_tool disasm >> build.make
-make_testcmd >> build.make
-make_test test-vm src/vm src/util >> build.make
-make_test test-compiler src/err src/token \
-          src/scanner src/ast src/dict src/parser src/util src/vm src/compiler >> build.make
-make_deps >> build.make
+src () {
+    echo "$1.c"
+}
 
+obj () {
+    echo "build/${1#*/}.o"
+}
+
+objs () {
+    for obj in "$@"; do
+        echo `obj $obj`
+    done
+}
+
+inline () {
+    tr '\n' ' '
+}
+
+# OBJECTS = ...
+mktarget () {
+    objs "$@"
+}
+
+mktool () {
+    name="$1"
+    shift
+    objs "tools/$1" "$@"
+}
+
+mktest () {
+    name="$1"
+    shift
+    objs "test/$1" "$@"
+}
+
+echo "OBJECTS = `bins | sort -u | inline`" > build.make
+
+# TOOLS = ...
+mktarget () { true; }
+mktool () {
+    echo "$1"
+}
+mktest () { true; }
+
+echo "TOOLS = `bins | inline`" >> build.make
+
+# TESTS = ...
+mktool () { true; }
+mktest () {
+    echo "$1"
+}
+
+echo "TESTS = `bins | inline`" >> build.make
+echo >> build.make
+
+# tools: ...
+echo 'tools: $(TOOLS)' >> build.make
+echo >> build.make
+
+# test: ...
+echo 'test: $(TESTS)' >> build.make
+mktest () {
+    printf '\t./%s\n' "$1"
+}
+bins >> build.make
+echo >> build.make
+
+# Building binaries
+binary () {
+    printf '%s: %s\n' "$1" "$2"
+    printf '\t$(CC) $(LDFLAGS) -o $@ %s\n' "$2"
+    echo
+}
+
+mktarget () {
+    binary '$(TARGET)' "`objs "$@" | inline`"
+}
+
+mktool () {
+    name="$1"
+    shift
+    binary "$name" "`objs "tools/$name" "$@" | inline`"
+}
+
+mktest () {
+    name="$1"
+    shift
+    binary "$name" "`objs "test/$name" "$@" | inline`"
+}
+
+bins >> build.make
+
+# Building object files
+mktarget () {
+    echo "$@" | tr ' ' '\n'
+}
+
+mktool () {
+    name="$1"
+    shift
+    echo "tools/$name" "$@" | tr ' ' '\n'
+}
+
+mktest () {
+    name="$1"
+    shift
+    echo "test/$name" "$@" | tr ' ' '\n'
+}
+
+for obj in `bins | sort -u | inline`; do
+    printf '%s: %s\n' `obj $obj` `src $obj`
+    printf '\t$(CC) $(CFLAGS) -o $@ -c %s\n' `src $obj`
+done >> build.make
 
 exit 0
