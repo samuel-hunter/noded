@@ -484,8 +484,8 @@ static void scan_expr_stmt(const struct stmt *stmt, size_t *n)
 		return;
 	}
 
-	// Handle special-case <- statmeent. They can be of either $var <- %port, or
-	// %port <- expr.
+	// Handle special-case <- statmeent. They can be of either $var <- %port,
+	// %port <- %port, or %port <- expr.
 	if (x->data.binary.x->type != STORE_EXPR) {
 		// The lvalue must be a store (port or a var).
 		send_error(&stmt->data.expr.start, ERR,
@@ -500,6 +500,10 @@ static void scan_expr_stmt(const struct stmt *stmt, size_t *n)
 			send_error(&x->data.binary.oppos, ERR,
 				"rvalue is not a port");
 		}
+	} else if (x->data.binary.y->type == STORE_EXPR &&
+		x->data.binary.y->data.store.kind == PORT) {
+		// %port <- %port
+		*n += ASM_OP + ASM_OP;
 	} else {
 		// %port <- expr
 		scan_expr(x->data.binary.y, n);
@@ -520,13 +524,20 @@ static uint8_t *compile_expr_stmt(const struct stmt *stmt,
 
 	// Handle special-case send <- statement.
 
-	// The two forms of x <- y are $var <- %port, and %port <- expr.
+	// The three forms of x <- y are $var <- %port, %port <-
+	// %port, and %port <- expr.
 	if (x->data.binary.x->data.store.kind == VARIABLE) {
 		// Let's work on $var <- %port w/ OP_RECV first!
 
 		buf = asm_op(OP_RECV0 + port(ctx, x->data.binary.y), buf);
 		buf = asm_op(OP_SAVE0 + var(ctx, x->data.binary.x), buf);
 		buf = asm_op(OP_POP, buf);
+		return buf;
+	} else if (x->data.binary.y->type == STORE_EXPR &&
+		x->data.binary.y->data.store.kind == PORT) {
+		// %port <- %port
+		buf = asm_op(OP_RECV0 + port(ctx, x->data.binary.y), buf);
+		buf = asm_op(OP_SEND0 + port(ctx, x->data.binary.x), buf);
 		return buf;
 	} else {
 		// %port <- expr
