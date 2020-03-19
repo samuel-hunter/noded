@@ -436,7 +436,7 @@ struct decl {
 
 struct proc_node {
 	uint16_t isp; // instruction pointer
-	const uint8_t *code; // machine code
+	const uint8_t *code; // machine code. Not owned by proc_node
 	uint16_t code_size;
 
 	uint8_t *stack;
@@ -526,6 +526,7 @@ void clear_parser(struct parser *parser);
 // vm.c
 struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
 	send_handler send, recv_handler recv);
+void free_proc_node(struct proc_node *node);
 void run(struct proc_node *node, void *handler_dat);
 
 // compiler.c

@@ -1,4 +1,5 @@
 #include <err.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "noded.h"
@@ -24,6 +25,14 @@ struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
 	result->stack = emalloc(result->stack_cap * sizeof(*result->stack));
 
 	return result;
+}
+
+void free_proc_node(struct proc_node *node)
+{
+	free(node->stack);
+	node->stack = NULL;
+
+	free(node);
 }
 
 static void expand_stack(struct proc_node *node)

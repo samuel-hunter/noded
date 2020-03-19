@@ -6,7 +6,7 @@
 
 #include "noded.h"
 
-static struct globals {
+static struct {
 	const char *filename;
 	size_t errors;
 	char *src;
