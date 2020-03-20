@@ -27,13 +27,19 @@ struct context {
 
 	// loop block handles information necessary for `break` and `continue`.
 	struct block {
-		uint16_t start_addr;
+		bool is_stack;
+
+		// for `continue`, addresses to be filled at the end
+		// of the block.
+		uint8_t **continues;
+		size_t continue_cap;
+		size_t ncontinues;
 
 		// for `break`, addresses to be filled at the end of
 		// the block.
-		uint8_t **endpoints;
-		size_t endpointscap;
-		size_t nendpoints;
+		uint8_t **breaks;
+		size_t break_cap;
+		size_t nbreaks;
 	} block;
 
 	uint8_t *start; // not owned by the struct.
@@ -188,46 +194,68 @@ static uint16_t label_addr(const struct context *ctx,
 }
 
 // Add a new block to the loop stack. Move the previous stack to *blk.
-static void push_stack(struct context *ctx, struct block *blk, uint8_t *buf)
+static void push_stack(struct context *ctx, struct block *blk)
 {
 	*blk = ctx->block;
 	memset(&ctx->block, 0, sizeof(ctx->block));
-
-	ctx->block.start_addr = abs_addr(ctx, buf);
-	ctx->block.endpointscap = 8;
-	ctx->block.endpoints = emalloc(
-		ctx->block.endpointscap * sizeof(ctx->block.endpoints));
+	ctx->block.is_stack = true;
 }
 
 // Reserve room for a pointer to the code, and return its address.
-static uint8_t **add_endpoint(struct context *ctx)
+static uint8_t **add_break(struct context *ctx)
 {
-	if (ctx->block.nendpoints == ctx->block.endpointscap) {
-		ctx->block.endpointscap *= 2;
-		ctx->block.endpoints = erealloc(ctx->block.endpoints,
-			ctx->block.endpointscap * sizeof(ctx->block.endpoints));
+	if (ctx->block.nbreaks == ctx->block.break_cap) {
+		if (ctx->block.break_cap == 0) {
+			ctx->block.break_cap = 8;
+		} else {
+			ctx->block.break_cap *= 2;
+		}
+		ctx->block.breaks = erealloc(ctx->block.breaks,
+			ctx->block.break_cap * sizeof(ctx->block.breaks));
 	}
 
-	return &ctx->block.endpoints[ctx->block.nendpoints++];
+	return &ctx->block.breaks[ctx->block.nbreaks++];
+}
+
+// Reserve room for a pointer to the code, and return its address.
+static uint8_t **add_continue(struct context *ctx)
+{
+	if (ctx->block.ncontinues == ctx->block.continue_cap) {
+		if (ctx->block.continue_cap == 0) {
+			ctx->block.continue_cap = 8;
+		} else {
+			ctx->block.continue_cap *= 2;
+		}
+		ctx->block.continues = erealloc(ctx->block.continues,
+			ctx->block.continue_cap * sizeof(ctx->block.continues));
+	}
+
+	return &ctx->block.continues[ctx->block.ncontinues++];
 }
 
 static bool in_block(const struct context *ctx)
 {
-	return ctx->block.endpoints != NULL;
+	return ctx->block.is_stack;
 }
 
 // Take care of all endpoints from the stack. Restore the previous
 // stack stored in *blk.
-static void pop_stack(struct context *ctx, struct block *blk, uint8_t *buf)
+static void pop_stack(struct context *ctx, struct block *blk,
+	uint8_t *breakpoint, uint8_t *continuepoint)
 {
-	// Fill all `break` addresses with *buf.
-	uint16_t end_addr = abs_addr(ctx, buf);
-	for (size_t i = 0; i < ctx->block.nendpoints; i++) {
-		asm_addr(end_addr, ctx->block.endpoints[i]);
+	// Fill all `break` addresses with *breakpoint.
+	uint16_t break_addr = abs_addr(ctx, breakpoint);
+	for (size_t i = 0; i < ctx->block.nbreaks; i++) {
+		asm_addr(break_addr, ctx->block.breaks[i]);
 	}
+	free(ctx->block.breaks);
 
-	// Free the endpoint array
-	free(ctx->block.endpoints);
+	// Ditto with continue
+	uint16_t continue_addr = abs_addr(ctx, continuepoint);
+	for (size_t i = 0; i < ctx->block.ncontinues; i++) {
+		asm_addr(continue_addr, ctx->block.continues[i]);
+	}
+	free(ctx->block.continues);
 
 	// Restore the previous stack
 	ctx->block = *blk;
@@ -563,13 +591,13 @@ static uint8_t *compile_branch_stmt(const struct stmt *stmt,
 
 	switch (branch->tok) {
 	case BREAK:
-		buf = asm_jump2(OP_JMP, add_endpoint(ctx), buf);
+		buf = asm_jump2(OP_JMP, add_break(ctx), buf);
 		break;
 	case GOTO:
 		buf = asm_jump(OP_JMP, label_addr(ctx, branch), buf);
 		break;
 	case CONTINUE:
-		buf = asm_jump(OP_JMP, ctx->block.start_addr, buf);
+		buf = asm_jump2(OP_JMP, add_continue(ctx), buf);
 		break;
 	default:
 		send_error(&stmt->data.branch.start, FATAL,
@@ -669,7 +697,7 @@ static void scan_loop_stmt(const struct stmt *stmt, struct context *ctx, size_t 
 static uint8_t *compile_loop_stmt(const struct stmt *stmt,
 	struct context *ctx, uint8_t *buf)
 {
-	uint8_t *addr_start, *end;
+	uint8_t *start, *continuepoint, *end;
 	struct block blk;
 
 	const struct loop_stmt *loop = &stmt->data.loop;
@@ -677,9 +705,9 @@ static uint8_t *compile_loop_stmt(const struct stmt *stmt,
 	if (loop->init != NULL)
 		buf = compile_stmt(loop->init, ctx, buf);
 
-	push_stack(ctx, &blk, buf);
+	push_stack(ctx, &blk);
 
-	addr_start = buf;
+	start = continuepoint = buf;
 
 	if (loop->exec_body_first) {
 		// do { ... }
@@ -687,7 +715,7 @@ static uint8_t *compile_loop_stmt(const struct stmt *stmt,
 
 		// while ( ... );
 		buf = compile_expr(loop->cond, ctx, buf);
-		buf = asm_jump(OP_TJMP, abs_addr(ctx, addr_start), buf);
+		buf = asm_jump(OP_TJMP, abs_addr(ctx, continuepoint), buf);
 	} else {
 		// while ( ... )
 		buf = compile_expr(loop->cond, ctx, buf);
@@ -695,14 +723,17 @@ static uint8_t *compile_loop_stmt(const struct stmt *stmt,
 
 		// { ... }
 		buf = compile_stmt(loop->body, ctx, buf);
-		if (loop->post != NULL)
+
+		if (loop->post != NULL) {
+			continuepoint = buf;
 			buf = compile_stmt(loop->post, ctx, buf);
-		buf = asm_jump(OP_JMP, abs_addr(ctx, addr_start), buf);
+		}
+		buf = asm_jump(OP_JMP, abs_addr(ctx, start), buf);
 
 		asm_addr(abs_addr(ctx, buf), end);
 	}
 
-	pop_stack(ctx, &blk, buf);
+	pop_stack(ctx, &blk, buf, continuepoint);
 	return buf;
 }
 
