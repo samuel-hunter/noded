@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "noded.h"
@@ -8,37 +9,15 @@
 #define BOLD "\033[1m"
 #define RED "\033[31m"
 
-// Return the start of the given line.
-static const char *strline(const char *src, int lineno)
-{
-	int cur = 1; // current line. The first line starts at 1.
-
-	while (cur < lineno) {
-		switch (*src) {
-		case '\000':
-			// This shouldn't happen unless the program
-			// has a bug. While I would normally crash and
-			// exit, this is only for `send_error`, so
-			// printing a NULL is fine enough.
-			return NULL;
-		case '\n':
-			cur++;
-			break;
-		}
-
-		src++;
-	}
-
-	return src;
-}
-
-void vprint_error(const char *srcname, const char *src, const struct position *pos,
+void vprint_error(const char *srcname, FILE *f, const struct position *pos,
 	enum error_type type, const char *fmt, va_list ap)
 {
 	const char *typestr;
+	char *lineptr = NULL;
+	size_t n;
+	long offset;
 
-	const char *line;
-	size_t line_length;
+	fflush(stdout); // Flush stdout so that it doesn't mangle with stderr.
 
 	switch (type) {
 	case WARN:
@@ -52,7 +31,6 @@ void vprint_error(const char *srcname, const char *src, const struct position *p
 		break;
 	}
 
-	fflush(stdout); // Flush stdout so that it doesn't mangle with stderr.
 	fprintf(stderr, BOLD "%s:%d:%d:" RESET " %s ",
 	        srcname, pos->lineno, pos->colno, typestr);
 
@@ -60,19 +38,25 @@ void vprint_error(const char *srcname, const char *src, const struct position *p
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, ".\n");
 
-	// Print the offending line and a caret to its column
-	line = strline(src, pos->lineno);
-	line_length = (size_t)(
-		(strchr(line, '\n') ? strchr(line, '\n') : strchr(line, '\000')) - line);
-	fwrite(line, sizeof(*line), line_length, stderr);
-	fprintf(stderr, "\n");
+	// Skip printing the offending line if we can't seek to it.
+	if (fseek(f, 0, SEEK_CUR) != 0) return;
 
-	if (line[pos->colno] == '\n') {
+	// Print the offending line and a caret to its column
+	offset = ftell(f); // preserve seek pos for later.
+	rewind(f);
+	for (int curline = 0; curline < pos->lineno; curline++) {
+		getline(&lineptr, &n, f);
+	}
+	printf("%s", lineptr);
+	fseek(f, offset, SEEK_SET);
+
+
+	if (lineptr[pos->colno] == '\n') {
 		// Error at end of line; don't post caret
 		fprintf(stderr, "\n");
 	} else {
 		for (int i = 0; i < pos->colno; i++) {
-			if (line[i] == '\t') {
+			if (lineptr[i] == '\t') {
 				fprintf(stderr, "\t");
 			} else {
 				fprintf(stderr, " ");
@@ -80,4 +64,5 @@ void vprint_error(const char *srcname, const char *src, const struct position *p
 		}
 		fprintf(stderr, "^\n");
 	}
+	free(lineptr);
 }

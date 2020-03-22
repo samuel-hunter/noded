@@ -1,7 +1,4 @@
 #include <ctype.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,6 +7,7 @@
 // Populate the next character in the scanner.
 static void next(struct scanner *s)
 {
+	// Update linenumber based on current character.
 	if (s->chr == '\n') {
 		s->pos.lineno++;
 		s->pos.colno = 0;
@@ -17,19 +15,26 @@ static void next(struct scanner *s)
 		s->pos.colno++;
 	}
 
-	if (s->offset < s->src_len) {
-		s->chr = s->src[s->offset++];
-	} else {
+	// Refresh the buffer when required.
+	if (s->offset == s->nread && !(feof(s->f) || ferror(s->f))) {
+		s->offset = 0;
+		s->nread = fread(s->buf, 1, sizeof(s->buf), s->f);
+		// If an I/O error happens, we can pretend it's the
+		// same as feof and return an EOF character.
+	}
+
+	// Replace next character.
+	if (s->offset == s->nread) {
 		s->chr = EOF;
+	} else {
+		s->chr = s->buf[s->offset++];
 	}
 }
 
-void init_scanner(struct scanner *scanner,
-                  const char src[], size_t src_len)
+void init_scanner(struct scanner *scanner, FILE *f)
 {
 	memset(scanner, 0, sizeof(*scanner));
-	scanner->src = src;
-	scanner->src_len = src_len;
+	scanner->f = f;
 	scanner->pos.lineno = 1;
 
 	next(scanner); // populate rune buffer.

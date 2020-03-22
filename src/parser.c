@@ -38,11 +38,10 @@ static void next(struct parser *p)
 	scan(&p->scanner, &p->current);
 }
 
-void init_parser(struct parser *parser,
-	const char src[], size_t src_size)
+void init_parser(struct parser *parser, FILE *f)
 {
 	memset(parser, 0, sizeof(*parser));
-	init_scanner(&parser->scanner, src, src_size);
+	init_scanner(&parser->scanner, f);
 	next(parser); // Populate our token buffer.
 }
 

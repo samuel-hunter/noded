@@ -5,6 +5,7 @@
 #include <stdbool.h> // bool
 #include <stddef.h> // size_t
 #include <stdint.h> // UINT8_MAX
+#include <stdio.h>
 
 // Precedence-based binary operator scanning.
 #define NON_OPERATOR   -1
@@ -23,7 +24,6 @@ enum error_type { WARN, ERR, FATAL };
 enum limits {
 	BUFFER_NODE_MAX = UINT8_MAX+1,
 	LITERAL_MAX = BUFFER_NODE_MAX*4, // Max byte size for a literal.
-	ERROR_MAX = 512,  // Max byte size for an error message.
 
 	PROC_VARS  = 4,
 	PROC_PORTS = 4
@@ -217,12 +217,13 @@ struct fulltoken {
 };
 
 struct scanner {
-	const char *src; // not owned by the struct
-	size_t src_len;
+	// The file it reads, and a buffer to store some state.
+	FILE *f; // Not owned by the scanner.
+	char buf[512];
+	size_t offset;
+	size_t nread;
 
 	char chr;      // Current character
-	size_t offset; // byte offset
-
 	struct position pos;
 };
 
@@ -455,7 +456,7 @@ void send_error(const struct position *pos, enum error_type type,
 bool has_errors(void);
 
 // err.c
-void vprint_error(const char *srcname, const char *src, const struct position *pos,
+void vprint_error(const char *srcname, FILE *f, const struct position *pos,
 	enum error_type type, const char *fmt, va_list ap);
 
 // util.c
@@ -475,8 +476,7 @@ bool issuffix(enum token tok);
 const char *strtoken(enum token tok);
 
 // scanner.c
-void init_scanner(struct scanner *scanner,
-                  const char src[], size_t src_len);
+void init_scanner(struct scanner *scanner, FILE *f);
 void scan(struct scanner *scanner, struct fulltoken *dest);
 
 // dict.c
@@ -517,8 +517,7 @@ void free_stmt(struct stmt *s);
 void free_decl(struct decl *d);
 
 // parser.c
-void init_parser(struct parser *parser,
-	const char src[], size_t src_len);
+void init_parser(struct parser *parser, FILE *f);
 bool parser_eof(const struct parser *parser);
 struct decl *parse_decl(struct parser *parser);
 void clear_parser(struct parser *parser);

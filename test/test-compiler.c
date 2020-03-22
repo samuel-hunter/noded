@@ -17,6 +17,7 @@ struct compiler_test {
 static struct {
 	bool has_error;
 	const struct compiler_test *cur;
+	FILE *f;
 } Globals = {0};
 
 void send_error(const struct position *pos, enum error_type type,
@@ -26,7 +27,7 @@ void send_error(const struct position *pos, enum error_type type,
 
 	// Print the error
 	va_start(ap, fmt);
-	vprint_error(Globals.cur->name, Globals.cur->src, pos,
+	vprint_error(Globals.cur->name, Globals.f, pos,
 		type, fmt, ap);
 	va_end(ap);
 
@@ -45,19 +46,28 @@ static void test_compiler(struct compiler_test *test)
 	struct parser parser;
 	struct decl *decl;
 	struct vm_test vmtest;
+	FILE *f;
 
 	Globals.cur = test;
 
 	printf("Running %s...\n", test->name);
 
-	init_parser(&parser, test->src, strlen(test->src));
+	// Move test code to a file for the program to read.
+	f = tmpfile();
+	if (f == NULL)
+		errx(1, "tmpfile(): I/O Error");
+	if (fwrite(test->src, 1, strlen(test->src), f) < strlen(test->src))
+		errx(1, "fwrite(): I/O Error");
+	rewind(f);
+
+	Globals.f = f;
+	init_parser(&parser, f);
 	decl = parse_decl(&parser);
 	if (has_errors())
 		exit(1);
 
 	if (decl->type != PROC_DECL) {
-		fprintf(stderr, "Expected proc decl\n");
-		exit(1);
+		errx(1, "Expected proc decl\n");
 	}
 
 	vmtest.code = compile(&decl->data.proc, &vmtest.code_size);
@@ -71,6 +81,8 @@ static void test_compiler(struct compiler_test *test)
 	test_code(&vmtest);
 
 	// Free all constructs.
+	Globals.f = NULL;
+	fclose(f);
 	free(vmtest.code);
 	free_decl(decl);
 
