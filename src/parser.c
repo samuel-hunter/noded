@@ -546,9 +546,32 @@ static struct stmt *parse_expr_stmt(struct parser *p)
 	expr = parse_expr(p);
 	expect(p, SEMICOLON, NULL);
 
-	result = new_stmt(EXPR_STMT);
-	result->data.expr.start = start;
-	result->data.expr.x = expr;
+	if (expr->type == BINARY_EXPR && expr->data.binary.op == SEND) {
+		// Special case: convert SEND expression <- to statement
+		if (expr->data.binary.x->type != STORE_EXPR) {
+			send_error(&expr->data.binary.oppos, ERR,
+				"lvalue expected to be a variable or port");
+			result = new_stmt(BAD_STMT);
+			result->data.bad.start = start;
+
+			return result;
+		}
+
+		result = new_stmt(SEND_STMT);
+		result->data.send.dest = expr->data.binary.x->data.store;
+		result->data.send.src = expr->data.binary.y;
+		result->data.send.oppos = expr->data.binary.oppos;
+
+		// Free the expression *EXCEPT* for the right operand
+		free(expr->data.binary.x);
+		free(expr);
+	} else {
+		// Normal case: create expression statement
+		result = new_stmt(EXPR_STMT);
+		result->data.expr.start = start;
+		result->data.expr.x = expr;
+	}
+
 	return result;
 }
 

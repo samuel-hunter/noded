@@ -163,6 +163,12 @@ static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
 		walk_stmt_(sfunc, efunc, s->data.loop.body, dat,
 			depth+1, order);
 		break;
+	case SEND_STMT:
+		if (efunc) {
+			walk_expr_(efunc, s->data.send.src,
+				dat, depth+1, order);
+		}
+		break;
 	default:
 		break; // No children here...
 	}

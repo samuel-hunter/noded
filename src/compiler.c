@@ -120,14 +120,14 @@ static void init_context(struct context *ctx)
 	ctx->labels = emalloc(ctx->labelcap * sizeof(*ctx->labels));
 }
 
-static uint8_t store(struct context *ctx, const struct expr *store)
+static uint8_t store(struct context *ctx, const struct store_expr *store)
 {
 	size_t *stores;
 	uint8_t *nstores;
 	uint8_t storemax;
 	const char *name;
 
-	if (store->data.store.kind == VARIABLE) {
+	if (store->kind == VARIABLE) {
 		stores = ctx->vars;
 		nstores = &ctx->nvars;
 		storemax = PROC_VARS;
@@ -140,21 +140,21 @@ static uint8_t store(struct context *ctx, const struct expr *store)
 	}
 
 	for (uint8_t i = 0; i < *nstores; i++) {
-		if (stores[i] == store->data.store.name_id)
+		if (stores[i] == store->name_id)
 			return i;
 	}
 
 	// Check if we can add another store.
 	if (*nstores == storemax) {
 		// Too many stores.
-		send_error(&store->data.store.start, ERR,
+		send_error(&store->start, ERR,
 			"Too many %s in proc node (max %d per node)",
 			name, storemax);
 		return 0;
 	}
 
 	// Add another port
-	stores[*nstores] = store->data.store.name_id;
+	stores[*nstores] = store->name_id;
 	return (*nstores)++;
 }
 
@@ -321,13 +321,19 @@ static uint8_t *compile_unary_expr(const struct expr *expr,
 
 		if (expr->data.unary.is_suffix) {
 			// x++, x--
-			buf = asm_op(OP_LOAD0 + store(ctx, expr->data.unary.x), buf);
-			buf = asm_op(code + store(ctx, expr->data.unary.x), buf);
+			buf = asm_op(OP_LOAD0 +
+				store(ctx, &expr->data.unary.x->data.store),
+				buf);
+			buf = asm_op(code +
+				store(ctx, &expr->data.unary.x->data.store),
+				buf);
 			buf = asm_op(OP_POP, buf);
 			return buf;
 		} else {
 			// ++x, --x
-			buf = asm_op(code + store(ctx, expr->data.unary.x), buf);
+			buf = asm_op(code +
+				store(ctx, &expr->data.unary.x->data.store),
+				buf);
 			return buf;
 		}
 	case LNOT:
@@ -402,16 +408,19 @@ static uint8_t *compile_binary_expr(const struct expr *expr,
 	} else if (op == ASSIGN) {
 		// Assumed X is a Store of VARIABLE kind.
 		buf = compile_expr(expr->data.binary.y, ctx, buf);
-		buf = asm_op(OP_SAVE0 + store(ctx, expr->data.binary.x), buf);
+		buf = asm_op(OP_SAVE0 +
+			store(ctx, &expr->data.binary.x->data.store), buf);
 		return buf;
 	} else if (op >= MUL_ASSIGN && op <= OR_ASSIGN) {
 		// Assumed X is a Stoer of VARIABLE kind.
 
 		// x OP_ASSIGN y compiles to x = x OP y.
-		buf = asm_op(OP_LOAD0 + store(ctx, expr->data.binary.x), buf);
+		buf = asm_op(OP_LOAD0 +
+			store(ctx, &expr->data.binary.x->data.store), buf);
 		buf = compile_expr(expr->data.binary.y, ctx, buf);
 		buf = asm_op(OP_MUL + (op - MUL_ASSIGN), buf);
-		buf = asm_op(OP_SAVE0 + store(ctx, expr->data.binary.x), buf);
+		buf = asm_op(OP_SAVE0 +
+			store(ctx, &expr->data.binary.x->data.store), buf);
 		return buf;
 	} else if (op == COMMA) {
 		buf = compile_expr(expr->data.binary.x, ctx, buf);
@@ -504,7 +513,7 @@ static uint8_t *compile_expr(const struct expr *expr,
 		return compile_cond_expr(expr, ctx, buf);
 	case STORE_EXPR:
 		// Type is assumed VARIABLE
-		buf = asm_op(OP_LOAD0 + store(ctx, expr), buf);
+		buf = asm_op(OP_LOAD0 + store(ctx, &expr->data.store), buf);
 		return buf;
 	}
 
@@ -513,66 +522,17 @@ static uint8_t *compile_expr(const struct expr *expr,
 
 static void scan_expr_stmt(const struct stmt *stmt, size_t *n)
 {
-	struct expr *x = stmt->data.expr.x;
-	if (!(x->type == BINARY_EXPR && x->data.binary.op == SEND)) {
-		// Normal case: non-send expressions.
-		scan_expr(stmt->data.expr.x, n);
-		*n += ASM_OP;
-		return;
-	}
-
-	// Handle special-case <- statmeent. They can be of either
-	//   %port|$var <- %port, or
-	//   %port <- expr.
-	if (x->data.binary.x->type != STORE_EXPR) {
-		// The lvalue must be a store (port or a var).
-		send_error(&stmt->data.expr.start, ERR,
-			"lvalue is not a port or a variable");
-	} else if (x->data.binary.y->type == STORE_EXPR &&
-		x->data.binary.y->data.store.kind == PORT) {
-		// %port|$var <- %port
-		*n += ASM_RECV;
-	} else if (x->data.binary.x->data.store.kind == PORT) {
-		// %port <- expr
-		scan_expr(x->data.binary.y, n);
-		*n += ASM_OP;
-	} else {
-		// $var <- expr
-		send_error(&stmt->data.expr.start, ERR,
-			"Expected lvalue or rvalue "
-			"to be a port");
-	}
+	scan_expr(stmt->data.expr.x, n);
+	*n += ASM_OP;
+	return;
 }
 
 static uint8_t *compile_expr_stmt(const struct stmt *stmt,
 	struct context *ctx, uint8_t *buf)
 {
-	struct expr *x = stmt->data.expr.x;
-	if (!(x->type == BINARY_EXPR && x->data.binary.op == SEND)) {
-		// Normal case: non `<-` expressions.
-		buf = compile_expr(stmt->data.expr.x, ctx, buf);
-		buf = asm_op(OP_POP, buf); // Discard the expression's value.
-		return buf;
-	}
-
-	// Handle special-case send <- statement.
-
-	// The two forms of x <- y are:
-	//   $var|%port <- %port,
-	//   %port <- expr.
-	if (x->data.binary.y->type == STORE_EXPR &&
-		x->data.binary.y->data.store.kind == PORT) {
-		// Let's work on $var|$port <- %port w/ OP_RECV first!
-		bool is_port = x->data.binary.x->data.store.kind == PORT;
-		buf = asm_recv(store(ctx, x->data.binary.x),
-			store(ctx, x->data.binary.y), is_port, buf);
-		return buf;
-	} else {
-		// %port <- expr
-		buf = compile_expr(x->data.binary.y, ctx, buf);
-		buf = asm_op(OP_SEND0 + store(ctx, x->data.binary.x), buf);
-		return buf;
-	}
+	buf = compile_expr(stmt->data.expr.x, ctx, buf);
+	buf = asm_op(OP_POP, buf); // Discard the expression's value.
+	return buf;
 }
 
 static uint8_t *compile_branch_stmt(const struct stmt *stmt,
@@ -736,6 +696,45 @@ static uint8_t *compile_loop_stmt(const struct stmt *stmt,
 	return buf;
 }
 
+static void scan_send_stmt(const struct stmt *stmt, size_t *n)
+{
+	const struct store_expr *dest = &stmt->data.send.dest;
+	const struct expr *src = stmt->data.send.src;
+
+	if (src->type == STORE_EXPR && src->data.store.kind == PORT) {
+		// %port|$var <- %port
+		*n += ASM_RECV;
+	} else if (dest->kind == PORT) {
+		// %port <- expr
+		scan_expr(src, n);
+		*n += ASM_OP;
+	} else {
+		// $var <- expr; doesn't make sense
+		send_error(&stmt->data.send.oppos, ERR,
+			"Expected dest or source to be a port");
+	}
+}
+
+static uint8_t *compile_send_stmt(const struct stmt *stmt,
+	struct context *ctx, uint8_t *buf)
+{
+	const struct store_expr *dest = &stmt->data.send.dest;
+	const struct expr *src = stmt->data.send.src;
+
+	if (src->type == STORE_EXPR && src->data.store.kind == PORT) {
+		// %port|$var <- %port
+		bool is_port = dest->kind == PORT;
+		buf = asm_recv(store(ctx, dest),
+			store(ctx, &src->data.store), is_port, buf);
+	} else {
+		// %port <- expr
+		buf = compile_expr(src, ctx, buf);
+		buf = asm_op(OP_SEND0 + store(ctx, dest), buf);
+	}
+
+	return buf;
+}
+
 static void scan_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
 {
 	switch (stmt->type) {
@@ -773,6 +772,9 @@ static void scan_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
 		break;
 	case LOOP_STMT:
 		scan_loop_stmt(stmt, ctx, n);
+		break;
+	case SEND_STMT:
+		scan_send_stmt(stmt, n);
 		break;
 	case HALT_STMT:
 		*n += ASM_OP;
@@ -812,6 +814,8 @@ static uint8_t *compile_stmt(const struct stmt *stmt,
 		return NULL; // Fatal send_error should stop execution
 	case LOOP_STMT:
 		return compile_loop_stmt(stmt, ctx, buf);
+	case SEND_STMT:
+		return compile_send_stmt(stmt, ctx, buf);
 	case HALT_STMT:
 		return asm_op(OP_HALT, buf);
 	}

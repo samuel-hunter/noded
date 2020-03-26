@@ -298,7 +298,7 @@ struct stmt {
 	enum stmt_type {
 		BAD_STMT, EMPTY_STMT, LABELED_STMT, EXPR_STMT,
 		BRANCH_STMT, BLOCK_STMT, IF_STMT, CASE_CLAUSE,
-		SWITCH_STMT, LOOP_STMT, HALT_STMT
+		SWITCH_STMT, LOOP_STMT, SEND_STMT, HALT_STMT
 	} type;
 	union {
 		struct bad_stmt {
@@ -368,6 +368,12 @@ struct stmt {
 			struct expr *cond;
 			struct stmt *body;
 		} loop;
+
+		struct send_stmt {
+			struct store_expr dest;
+			struct expr *src;
+			struct position oppos;
+		} send;
 
 		struct halt_stmt {
 			struct position start;
