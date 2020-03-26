@@ -1,0 +1,16 @@
+image: alpine/edge
+repositories: {}
+environment:
+ mirror: git@github.com:samuel-hunter/noded.git
+ GIT_SSH_COMMAND: ssh -o StrictHostKeyChecking=no
+secrets:
+  - 21011287-e96d-4b41-a595-c6c1e0dd235f
+shell: false
+sources:
+- https://git.sr.ht/~shunter/noded
+tasks:
+- updatemirror: |
+    cd noded
+    git remote add mirror $mirror
+    git push mirror master
+triggers: []
