@@ -10,9 +10,14 @@ each other.
 
 ## Progress
 
-I feel the [specification](./SPEC.md) has the important parts
-finished. The implementation, however, is no more than a parser at
-this stage.
+We got a working interpreter! Currently, it interprets only a single
+node, and all message-sending is between that node and standard
+input/output.
+
+## Language Specification
+
+A more detailed specification which has the nitty-gritty details can
+be found in [SPEC.md](./SPEC.md).
 
 ## Examples
 
@@ -136,8 +141,3 @@ truth.out -> io.out;
 
 More examples can be found in the [corresponding
 directory](./examples).
-
-## Language Specification
-
-A more detailed specification which has the nitty-gritty details can
-be found in [SPEC.md](./SPEC.md).

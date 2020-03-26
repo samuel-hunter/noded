@@ -49,26 +49,48 @@ bool has_errors(void)
 
 static void print_usage(const char *prog_name)
 {
-	fprintf(stderr, "Usage: %s [FILE]\n", prog_name);
+	fprintf(stderr, "Usage: %s FILE\n", prog_name);
+}
+
+static void handle_send(uint8_t val, int port, void *dat)
+{
+	// Route all SEND operations to stdout
+	(void)port;
+	(void)dat;
+
+	putchar(val);
+}
+
+static uint8_t handle_recv(int port, void *dat)
+{
+	// Route all RECV operations to stdin
+	(void)port;
+	(void)dat;
+
+	int chr = getchar();
+	if (chr == EOF) {
+		// No more input; halt.
+		// TODO implement a way to trigger a halt in the VM.
+		exit(0);
+	}
+
+	return (uint8_t)chr;
 }
 
 int main(int argc, char **argv)
 {
 	struct parser parser;
 
-	// Choose the file to interpret
-	if (argc > 2) {
+	// Noded requires a file, it shouldn't just be stdin.
+	if (argc != 2) {
 		print_usage(argv[0]);
 		return 1;
-	} else if (argc == 2) {
-		Globals.filename = argv[1];
-		Globals.f = fopen(Globals.filename, "r");
-		if (Globals.f == NULL)
-			err(1, "Cannot open %s", Globals.filename);
-	} else {
-		Globals.filename = "<stdin>";
-		Globals.f = stdin;
 	}
+
+	Globals.filename = argv[1];
+	Globals.f = fopen(Globals.filename, "r");
+	if (Globals.f == NULL)
+		err(1, "Cannot open %s", Globals.filename);
 
 	// Scan the file token-by-token
 	init_parser(&parser, Globals.f);
@@ -83,20 +105,22 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint16_t codesize;
-	uint8_t *code = compile(&decl->data.proc, &codesize);
+	uint16_t code_size;
+	uint8_t *code = compile(&decl->data.proc, &code_size);
 
-	// free the AST and code, since we no longer need it.
+	if (code == NULL || has_errors())
+		return 1;
+
+	// free the AST and parser, since we no longer need it.
 	free_decl(decl);
 	clear_parser(&parser);
 	fclose(Globals.f);
 
-	if (code == NULL || has_errors()) {
-		return 1;
-	} else {
-		fwrite(code, sizeof(*code), codesize, stdout);
-		free(code);
-	}
+	// Give ownership of code to proc node.
+	struct proc_node *node = new_proc_node(code, code_size,
+		&handle_send, &handle_recv);
+	run(node, NULL);
+	free_proc_node(node);
 
 	return 0;
 }
