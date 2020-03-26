@@ -165,18 +165,24 @@ int main(void)
 	test_vm(&test_manyports);
 
 	uint8_t test_recv_c[] = {
-		OP_RECV0,
-		OP_SEND1,
+		OP_RECV0, 0x05, // %1 <- %0
 
-		OP_RECV2,
-		OP_SEND3,
+		OP_RECV2, 0x07, // %3 <- %2
+
+		OP_RECV0, 0x01, // $1 <- %0
+		OP_LOAD1,
+		OP_SEND1,       // %1 <- $1
+
+		OP_RECV2, 0x03, // $3 <- %2
+		OP_LOAD3,
+		OP_SEND3,       // %3 <- $3
 
 		OP_HALT
 	};
-	uint8_t test_recv_1r[] = {10};
-	uint8_t test_recv_2s[] = {10};
-	uint8_t test_recv_3r[] = {20};
-	uint8_t test_recv_4s[] = {20};
+	uint8_t test_recv_1r[] = {10, 30};
+	uint8_t test_recv_2s[] = {10, 30};
+	uint8_t test_recv_3r[] = {20, 40};
+	uint8_t test_recv_4s[] = {20, 40};
 	struct vm_test test_recv = {
 		.name = "Recv Test",
 		.code = test_recv_c,

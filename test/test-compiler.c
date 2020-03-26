@@ -160,22 +160,36 @@ int main(void)
 		"    $var <- %one;" // make sure %one is registered as port 0
 		"    %two <- $var;"
 		"    %two <- %one;"
+		"    %four <- %three;"
 		"    halt;"
 		"}";
-	uint8_t test_recv_1s[] = {10, 20};
+	uint8_t test_recv_1r[] = {10, 20};
+	uint8_t test_recv_2s[] = {10, 20};
+	uint8_t test_recv_3r[] = {30};
+	uint8_t test_recv_4s[] = {30};
 	struct compiler_test test_recv = {
 		.name = "Recv Test",
 		.src = test_recv_src,
 		.ports = {
 			{
-				.recv = test_recv_1s,
-				.recv_len = sizeof(test_recv_1s)/
-				            sizeof(*test_recv_1s)
+				.recv = test_recv_1r,
+				.recv_len = sizeof(test_recv_1r)/
+				            sizeof(*test_recv_1r)
 			},
 			{
-				.send = test_recv_1s,
-				.send_len = sizeof(test_recv_1s)/
-				            sizeof(*test_recv_1s)
+				.send = test_recv_2s,
+				.send_len = sizeof(test_recv_2s)/
+				            sizeof(*test_recv_2s)
+			},
+			{
+				.recv = test_recv_3r,
+				.recv_len = sizeof(test_recv_3r)/
+				            sizeof(*test_recv_3r)
+			},
+			{
+				.send = test_recv_4s,
+				.send_len = sizeof(test_recv_4s)/
+				            sizeof(*test_recv_4s)
 			}
 		}
 	};

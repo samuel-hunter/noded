@@ -129,6 +129,11 @@ enum token {
 	keyword_end
 };
 
+enum {
+	RECV_STORE_MASK = 0x03,
+	RECV_PORT_FLAG = 0x04
+};
+
 enum opcode {
 	OP_INVALID,
 	OP_NOOP,

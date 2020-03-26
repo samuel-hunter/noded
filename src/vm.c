@@ -74,7 +74,7 @@ void run(struct proc_node *node, void *handler_dat)
 		// The length of the instruction, or how many bytes to advance by.
 		uint16_t advance = 1;
 		uint8_t instr = node->code[node->isp];
-		uint8_t val1, val2;
+		uint8_t val1, val2, dest, src;
 
 		switch (instr) {
 		case OP_PUSH:
@@ -183,37 +183,55 @@ void run(struct proc_node *node, void *handler_dat)
 		case OP_SAVE1:
 		case OP_SAVE2:
 		case OP_SAVE3:
-			node->mem[instr - OP_SAVE0] = peek(node);
+			dest = instr - OP_SAVE0;
+			node->mem[dest] = peek(node);
 			break;
 		case OP_LOAD0:
 		case OP_LOAD1:
 		case OP_LOAD2:
 		case OP_LOAD3:
-			push(node, node->mem[instr - OP_LOAD0]);
+			src = instr - OP_LOAD0;
+			push(node, node->mem[src]);
 			break;
 		case OP_INC0:
 		case OP_INC1:
 		case OP_INC2:
 		case OP_INC3:
-			push(node, ++node->mem[instr - OP_INC0]);
+			src = instr - OP_INC0;
+			push(node, ++node->mem[src]);
 			break;
 		case OP_DEC0:
 		case OP_DEC1:
 		case OP_DEC2:
 		case OP_DEC3:
-			push(node, --node->mem[instr - OP_DEC0]);
+			src = instr - OP_DEC0;
+			push(node, --node->mem[src]);
 			break;
 		case OP_SEND0:
 		case OP_SEND1:
 		case OP_SEND2:
 		case OP_SEND3:
-			node->send(pop(node), instr - OP_SEND0, handler_dat);
+			dest = instr - OP_SEND0;
+			node->send(pop(node), dest, handler_dat);
 			break;
 		case OP_RECV0:
 		case OP_RECV1:
 		case OP_RECV2:
 		case OP_RECV3:
-			push(node, node->recv(instr - OP_RECV0, handler_dat));
+			advance = 2;
+
+			src = instr - OP_RECV0;
+			dest = node->code[node->isp+1] & RECV_STORE_MASK;
+			if (node->code[node->isp+1] & RECV_PORT_FLAG) {
+				// %port <- %port
+				node->send(node->recv(src, handler_dat),
+					dest, handler_dat);
+			} else {
+				// $var <- %port
+				node->mem[dest] =
+					node->recv(src, handler_dat);
+			}
+
 			break;
 		case OP_HALT:
 			return;

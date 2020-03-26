@@ -118,6 +118,7 @@ int main(int argc, char **argv)
 
 		size_t advance = 1;
 		uint8_t instr = code[isp];
+		uint8_t tmp;
 
 		printf("%04x\t%s ", isp, code_str(instr));
 		switch (instr) {
@@ -130,6 +131,16 @@ int main(int argc, char **argv)
 		case OP_TJMP:
 			advance = 3;
 			printf("0x%04x\n", addr_value(&code[isp+1]));
+			break;
+		case OP_RECV0:
+		case OP_RECV1:
+		case OP_RECV2:
+		case OP_RECV3:
+			advance = 2;
+
+			tmp = code[isp+1];
+			printf("%c%d\n", tmp&RECV_PORT_FLAG ? '%' : '$',
+				tmp & RECV_STORE_MASK);
 			break;
 		default:
 			printf("\n");

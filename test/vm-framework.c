@@ -4,10 +4,14 @@
 #include "noded.h"
 #include "vm-framework.h"
 
+#define DEBUG stdout
+
 static void send(uint8_t val, int porti, void *dat)
 {
 	struct vm_test *test = (struct vm_test *)dat;
 	struct test_port *port = &test->ports[porti];
+
+	fprintf(stdout, "%%%d <- %d\n", porti, val);
 
 	if (port->send_idx == port->send_len)
 		errx(1, "Too many messages from port %d "
@@ -27,6 +31,8 @@ static uint8_t recv(int porti, void *dat)
 	if (port->recv_idx == port->recv_len)
 		errx(1, "Too many messages requested from port %d "
 		        "(expected only %lu messages)", porti, port->recv_len);
+
+	fprintf(DEBUG, "%d <- %%%d\n", port->recv[port->recv_idx], porti);
 
 	uint8_t result = port->recv[port->recv_idx++];
 	return result;
