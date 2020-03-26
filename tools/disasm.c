@@ -4,6 +4,8 @@
  * disasm reads the VM's bytecode directly from standard input and
  * prints a human-readable format. I'm mainly using this to spot-check
  * how the compiler is handling parsed code.
+ *
+ * see also tools/compile.c
  */
 #include <stdio.h>
 #include <err.h>
@@ -99,7 +101,7 @@ int main(int argc, char **argv)
 {
 	// this program doesn't need any arguments.
 	if (argc != 1) {
-		printf("Usage: %s\n", argv[0]);
+		fprintf(stderr, "Usage: %s < INPUT\n", argv[0]);
 		return 1;
 	}
 

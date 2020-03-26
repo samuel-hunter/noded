@@ -8,4 +8,5 @@ build.make
 # binaries
 /noded
 /disasm
+/compile
 /test-*
