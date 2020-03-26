@@ -1,0 +1,12 @@
+processor main {
+	$chr <- %in;
+	if ($chr >= 'a' && $chr <= 'z') {
+		$chr -= 0x20;
+	} else if ($chr >= 'A' && $chr <= 'Z') {
+		$chr += 0x20;
+	}
+	%out <- $chr;
+}
+
+io.in -> main.in;
+main.out -> io.out;
