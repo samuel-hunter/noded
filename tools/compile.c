@@ -14,6 +14,8 @@
 #include <err.h>
 
 #include "noded.h"
+#include "ast.h"
+#include "bytecode.h"
 
 static size_t errors;
 // Number of errors before the parser panics.

@@ -9,6 +9,7 @@
 #define BOLD "\033[1m"
 #define RED "\033[31m"
 
+
 void vprint_error(const char *srcname, FILE *f, const struct position *pos,
 	enum error_type type, const char *fmt, va_list ap)
 {

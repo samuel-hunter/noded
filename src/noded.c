@@ -5,6 +5,9 @@
 #include <err.h>
 
 #include "noded.h"
+#include "ast.h"
+#include "bytecode.h"
+
 
 static struct {
 	// Source file

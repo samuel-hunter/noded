@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "noded.h"
+#include "ast.h"
 #include "vm-framework.h"
 
 struct compiler_test {

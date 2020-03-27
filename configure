@@ -6,7 +6,7 @@ set -e
 [ -z "$CFLAGS" ] && CFLAGS="--std=c99 -Werror -Wall -Wextra -Wpedantic -D_DEFAULT_SOURCE"
 [ -z "$LDFLAGS" ] && LDFLAGS=""
 
-includes="include/noded.h test/vm-framework.h"
+includes="include/noded.h include/ast.h include/bytecode.h test/vm-framework.h"
 
 bins () {
     mktarget src/noded src/err src/token src/scanner src/ast \

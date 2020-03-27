@@ -2,6 +2,7 @@
 #define VM_FRAMEWORK_H
 
 #include "noded.h"
+#include "bytecode.h"
 
 struct vm_test {
 	const char *name;

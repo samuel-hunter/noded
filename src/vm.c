@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "noded.h"
+#include "bytecode.h"
 
 #define INITIAL_STACK_SIZE 8
 

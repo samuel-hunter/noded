@@ -3,6 +3,9 @@
 #include <string.h>
 
 #include "noded.h"
+#include "bytecode.h"
+#include "ast.h"
+
 
 enum {
 	ASM_OP = 1,                  // OP_*
