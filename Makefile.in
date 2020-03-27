@@ -7,6 +7,7 @@ RM ?= rm -f
 CC = @@CC@@
 CFLAGS = @@CFLAGS@@ -Iinclude
 LDFLAGS = @@LDFLAGS@@
+INCLUDES = @@INCLUDES@@
 
 default: noded
 all: noded tools

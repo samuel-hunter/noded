@@ -54,15 +54,17 @@ EOF
     esac
 done
 
-# Create the main Makefile
+
 echo "Prefix: $PREFIX"
 echo "CC=$CC"
 echo "CFLAGS=$CFLAGS"
 echo "LDFLAGS=$LDFLAGS"
+# Create the main Makefile
 sed "
 s|@@CC@@|$CC|g;
 s|@@CFLAGS@@|$CFLAGS|g;
-s|@@LDFLAGS@@|$LDFLAGS|g
+s|@@LDFLAGS@@|$LDFLAGS|g;
+s|@@INCLUDES@@|$includes|g
 " < Makefile.in > Makefile
 
 src () {
@@ -175,7 +177,7 @@ mktest () {
 }
 
 for obj in `bins | sort -u | inline`; do
-    printf '%s: %s %s\n' `obj $obj` `src $obj` "$includes"
+    printf '%s: %s $(INCLUDES)\n' `obj $obj` `src $obj`
     printf '\t$(CC) $(CFLAGS) -o $@ -c %s\n' `src $obj`
 done >> build.make
 
