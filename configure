@@ -10,13 +10,13 @@ includes="include/noded.h include/ast.h include/bytecode.h test/vm-framework.h"
 
 bins () {
     mktarget src/noded src/err src/token src/scanner src/ast \
-             src/dict src/parser src/util src/vm src/compiler
+             src/dict src/parser src/alloc src/vm src/compiler
     mktool disasm
     mktool compile src/err src/token src/scanner src/ast \
-                   src/dict src/parser src/util src/compiler
-    mktest test-vm test/vm-framework src/vm src/util
+                   src/dict src/parser src/alloc src/compiler
+    mktest test-vm test/vm-framework src/vm src/alloc
     mktest test-compiler test/vm-framework src/err src/token src/scanner src/ast \
-                         src/dict src/parser src/util src/vm src/compiler
+                         src/dict src/parser src/alloc src/vm src/compiler
 }
 
 for i in "$@"; do

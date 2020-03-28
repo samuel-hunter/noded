@@ -40,21 +40,21 @@ static const char *decls[] = {
 
 struct expr *new_expr(enum expr_type type)
 {
-	struct expr *result = emalloc(sizeof(*result));
+	struct expr *result = ecalloc(1, sizeof(*result));
 	result->type = type;
 	return result;
 }
 
 struct stmt *new_stmt(enum stmt_type type)
 {
-	struct stmt *result = emalloc(sizeof(*result));
+	struct stmt *result = ecalloc(1, sizeof(*result));
 	result->type = type;
 	return result;
 }
 
 struct decl *new_decl(enum decl_type type)
 {
-	struct decl *result = emalloc(sizeof(*result));
+	struct decl *result = ecalloc(1, sizeof(*result));
 	result->type = type;
 	return result;
 }

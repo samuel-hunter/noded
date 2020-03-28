@@ -177,9 +177,9 @@ void vprint_error(const char *srcname, FILE *f, const struct position *pos,
 	enum error_type type, const char *fmt, va_list ap);
 
 
-// util.c
+// alloc.c
 
-void *emalloc(size_t size);
+void *ecalloc(size_t nmemb, size_t size);
 void *erealloc(void *ptr, size_t size);
 
 

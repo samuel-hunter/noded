@@ -13,8 +13,7 @@ struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
 	if (code_size > (size_t)UINT16_MAX + 1)
 		errx(1, "Bytecode size too large");
 
-	struct proc_node *result = emalloc(sizeof(*result));
-	memset(result, 0, sizeof(*result));
+	struct proc_node *result = ecalloc(1, sizeof(*result));
 	result->code = code;
 	result->code_size = code_size;
 
@@ -23,7 +22,7 @@ struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
 
 	// Eagerly create a new stack buffer.
 	result->stack_cap = INITIAL_STACK_SIZE;
-	result->stack = emalloc(result->stack_cap * sizeof(*result->stack));
+	result->stack = ecalloc(result->stack_cap, sizeof(*result->stack));
 
 	return result;
 }

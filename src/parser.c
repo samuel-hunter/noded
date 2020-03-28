@@ -621,7 +621,7 @@ static struct stmt *parse_block_stmt(struct parser *p)
 
 	size_t nstmts = 0;
 	size_t cap = 1;
-	struct stmt **stmt_list = emalloc(cap * sizeof(*stmt_list));
+	struct stmt **stmt_list = ecalloc(cap, sizeof(*stmt_list));
 
 	expect(p, LBRACE, &start);
 	while (p->current.tok != RBRACE && p->current.tok != TOK_EOF) {

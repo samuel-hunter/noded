@@ -120,7 +120,7 @@ static void init_context(struct context *ctx)
 {
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->labelcap = 8;
-	ctx->labels = emalloc(ctx->labelcap * sizeof(*ctx->labels));
+	ctx->labels = ecalloc(ctx->labelcap, sizeof(*ctx->labels));
 }
 
 static uint8_t store(struct context *ctx, const struct store_expr *store)
@@ -850,7 +850,7 @@ uint8_t *compile(const struct proc_decl *proc, uint16_t *n)
 		return NULL;
 	}
 
-	code = emalloc(size);
+	code = ecalloc(size, sizeof(*code));
 	ctx.start = code;
 	end = compile_stmt(proc->body, &ctx, code);
 

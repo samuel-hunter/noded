@@ -14,7 +14,7 @@
 static void init(struct symdict *dict)
 {
 	dict->cap = 8;
-	dict->syms = emalloc(dict->cap * sizeof(*dict->syms));
+	dict->syms = ecalloc(dict->cap, sizeof(*dict->syms));
 }
 
 static void expand(struct symdict *dict)
