@@ -1,8 +1,9 @@
 #ifndef BYTECODE_H
 #define BYTECODE_H
 
-#include <stddef.h> // size_t
-#include <stdint.h> // uint8_t, UINT8_MAX
+#include <stdbool.h> // bool
+#include <stddef.h>  // size_t
+#include <stdint.h>  // uint8_t, UINT8_MAX
 
 enum {
 	RECV_STORE_MASK = 0x03,
@@ -13,6 +14,9 @@ enum {
 	PROC_VARS  = 4,
 	PROC_PORTS = 4
 };
+
+typedef void (*send_handler)(uint8_t val, int port, void *dat);
+typedef uint8_t (*recv_handler)(int port, void *dat);
 
 enum opcode {
 	OP_INVALID,
@@ -104,6 +108,12 @@ struct proc_node {
 
 	uint8_t mem[PROC_VARS];
 };
+
+
+// bytecode.c
+
+uint16_t addr_value(const uint8_t *src);
+uint8_t recv_dest(const uint8_t *src, bool *is_store);
 
 
 // vm.c

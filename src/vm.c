@@ -66,12 +66,6 @@ static uint8_t pop(struct proc_node *node)
 	return node->stack[--node->stack_top];
 }
 
-static uint16_t addr_value(const uint8_t *src)
-{
-	return ((uint16_t)(src[0])<<8) +
-	       (uint16_t)(src[1]);
-}
-
 void run(struct proc_node *node, void *handler_dat)
 {
 	while (true) {
@@ -79,6 +73,7 @@ void run(struct proc_node *node, void *handler_dat)
 		uint16_t advance = 1;
 		uint8_t instr = node->code[node->isp];
 		uint8_t val1, val2, dest, src;
+		bool is_store;
 
 		switch (instr) {
 		case OP_PUSH:
@@ -164,14 +159,14 @@ void run(struct proc_node *node, void *handler_dat)
 			push(node, !pop(node));
 			break;
 		case OP_JMP:
-			node->isp = addr_value(&node->code[node->isp+1]);
+			node->isp = addr_value(&node->code[node->isp]);
 			advance = 0;
 			break;
 		case OP_TJMP:
 			advance = 3;
 
 			if (pop(node)) {
-				node->isp = addr_value(&node->code[node->isp+1]);
+				node->isp = addr_value(&node->code[node->isp]);
 				advance = 0;
 			}
 			break;
@@ -179,7 +174,7 @@ void run(struct proc_node *node, void *handler_dat)
 			advance = 3;
 
 			if (!pop(node)) {
-				node->isp = addr_value(&node->code[node->isp+1]);
+				node->isp = addr_value(&node->code[node->isp]);
 				advance = 0;
 			}
 			break;
@@ -223,10 +218,9 @@ void run(struct proc_node *node, void *handler_dat)
 		case OP_RECV2:
 		case OP_RECV3:
 			advance = 2;
-
 			src = instr - OP_RECV0;
-			dest = node->code[node->isp+1] & RECV_STORE_MASK;
-			if (node->code[node->isp+1] & RECV_PORT_FLAG) {
+			dest = recv_dest(&node->code[node->isp], &is_store);
+			if (is_store) {
 				// %port <- %port
 				node->send(node->recv(src, handler_dat),
 					dest, handler_dat);

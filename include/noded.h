@@ -13,9 +13,6 @@
 #define HIGHEST_BINARY 13
 #define HIGHEST_PREC   15
 
-typedef void (*send_handler)(uint8_t val, int port, void *dat);
-typedef uint8_t (*recv_handler)(int port, void *dat);
-
 enum error_type { WARN, ERR, FATAL };
 
 // Note: LITERAL_MAX is calculated by multiplying the buffer size with

@@ -10,14 +10,15 @@ includes="include/noded.h include/ast.h include/bytecode.h test/vm-framework.h"
 debug_flags=false
 
 bins () {
-    mktarget src/noded src/err src/token src/scanner src/ast \
-             src/dict src/parser src/alloc src/vm src/compiler
-    mktool disasm
-    mktool compile src/err src/token src/scanner src/ast \
-                   src/dict src/parser src/alloc src/compiler
-    mktest test-vm test/vm-framework src/vm src/alloc
-    mktest test-compiler test/vm-framework src/err src/token src/scanner src/ast \
-                         src/dict src/parser src/alloc src/vm src/compiler
+    mktarget src/alloc src/ast src/bytecode src/compiler src/dict \
+             src/err src/noded src/parser src/scanner src/token src/vm
+    mktool disasm src/bytecode
+    mktool compile src/alloc src/ast src/compiler src/dict src/err \
+           src/parser src/scanner src/token
+    mktest test-vm src/alloc src/bytecode src/vm test/vm-framework
+    mktest test-compiler src/alloc src/ast src/bytecode src/compiler \
+           src/dict src/err src/parser src/scanner src/token src/vm \
+           test/vm-framework
 }
 
 for i in "$@"; do

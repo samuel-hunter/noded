@@ -90,14 +90,6 @@ static const char *code_str(uint8_t code)
 	return code_names[code];
 }
 
-// TODO: This is ripped straight from vm.c. Should put this somewhere
-// shared instead.
-static uint16_t addr_value(const uint8_t *src)
-{
-	return ((uint16_t)(src[0])<<8) +
-	       (uint16_t)(src[1]);
-}
-
 int main(int argc, char **argv)
 {
 	// this program doesn't need any arguments.
@@ -122,6 +114,7 @@ int main(int argc, char **argv)
 		size_t advance = 1;
 		uint8_t instr = code[isp];
 		uint8_t tmp;
+		bool is_store;
 
 		printf("%04x\t%s ", isp, code_str(instr));
 		switch (instr) {
@@ -133,17 +126,16 @@ int main(int argc, char **argv)
 		case OP_FJMP:
 		case OP_TJMP:
 			advance = 3;
-			printf("0x%04x\n", addr_value(&code[isp+1]));
+			printf("0x%04x\n", addr_value(&code[isp]));
 			break;
 		case OP_RECV0:
 		case OP_RECV1:
 		case OP_RECV2:
 		case OP_RECV3:
 			advance = 2;
-
-			tmp = code[isp+1];
-			printf("%c%d\n", tmp&RECV_PORT_FLAG ? '%' : '$',
-				tmp & RECV_STORE_MASK);
+			// tmp = store index
+			tmp = recv_dest(&code[isp], &is_store);
+			printf("%c%d\n", is_store ? '%' : '$', tmp);
 			break;
 		default:
 			printf("\n");
