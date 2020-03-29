@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <err.h>
+#include <errno.h>
 
 #include "noded.h"
 #include "ast.h"
@@ -46,11 +47,6 @@ void send_error(const struct position *pos, enum error_type type,
 	}
 }
 
-bool has_errors(void)
-{
-	return errors > 0;
-}
-
 int main(int argc, char **argv)
 {
 	struct parser parser;
@@ -65,7 +61,7 @@ int main(int argc, char **argv)
 	init_parser(&parser, stdin);
 
 	struct decl *decl = parse_decl(&parser);
-	if (has_errors()) {
+	if (errors > 0) {
 		return 1;
 	}
 
@@ -74,17 +70,21 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint16_t codesize;
-	uint8_t *code = compile(&decl->data.proc, &codesize);
+	errno = 0; // Reset errno
+	size_t code_size = bytecode_size(&decl->data.proc);
+	if (errno == ERANGE)
+		errx(1, "Node too complex");
+	uint8_t *code = ecalloc(code_size, sizeof(*code));
+	compile(&decl->data.proc, code);
 
 	// free the AST and parser, since we no longer need it.
 	free_decl(decl);
 	clear_parser(&parser);
 
-	if (code == NULL || has_errors()) {
+	if (errors > 0) {
 		return 1;
 	} else {
-		fwrite(code, sizeof(*code), codesize, stdout);
+		fwrite(code, sizeof(*code), code_size, stdout);
 		free(code);
 	}
 

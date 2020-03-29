@@ -26,7 +26,7 @@
 void vprint_error(const char *srcname, FILE *f, const struct position *pos,
 	enum error_type type, const char *fmt, va_list ap)
 {
-	const char *typestr;
+	const char *typestr = NULL;
 	char *lineptr = NULL;
 	size_t n;
 	long offset;

@@ -2,6 +2,7 @@
  * compiler - compile an AST to bytecode
  */
 #include <err.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -63,8 +64,8 @@ struct context {
 	uint8_t *start; // not owned by the struct.
 };
 
-static void scan_expr(const struct expr *expr, size_t *n);
-static void scan_stmt(const struct stmt *stmt, size_t *n);
+static size_t expr_size(const struct expr *expr);
+static size_t stmt_size(const struct stmt *stmt);
 
 static uint8_t *compile_expr(const struct expr *expr,
 	struct context *ctx, uint8_t *buf);
@@ -341,7 +342,7 @@ static void resolve_gotos(struct context *ctx)
 
 // ---Scanning and Compilation---
 
-static void scan_unary_expr(const struct expr *expr, size_t *n)
+static size_t unary_expr_size(const struct expr *expr)
 {
 	switch (expr->data.unary.op) {
 	case INC:
@@ -352,23 +353,22 @@ static void scan_unary_expr(const struct expr *expr, size_t *n)
 
 			send_error(&expr->data.unary.start, ERR,
 				"variable required as increment/decrement operand");
-			return;
+			return 0;
 		}
 
 		if (expr->data.unary.is_suffix) {
-			*n += ASM_OP + ASM_OP + ASM_OP;
+			return ASM_OP + ASM_OP + ASM_OP;
 		} else {
-			*n += ASM_OP;
+			return ASM_OP;
 		}
 		break;
 	case LNOT:
 	case NOT:
-		scan_expr(expr->data.unary.x, n);
-		*n += ASM_OP;
-		break;
+		return expr_size(expr->data.unary.x) + ASM_OP;
 	default:
 		send_error(&expr->data.unary.start, FATAL,
 			"Parser bug: Malformed unary expression");
+		return 0;
 	}
 }
 
@@ -415,47 +415,48 @@ static uint8_t *compile_unary_expr(const struct expr *expr,
 	}
 }
 
-static void scan_binary_expr(const struct expr *expr, size_t *n)
+static size_t binary_expr_size(const struct expr *expr)
 {
 	const struct binary_expr *binary = &expr->data.binary;
 
 	enum token op = binary->op;
 	if (op >= MUL && op <= LNOT) {
 		// x OP y
-		scan_expr(binary->x, n);
-		scan_expr(binary->y, n);
-		*n += ASM_OP;
+		return expr_size(binary->x) +
+			expr_size(binary->y) +
+			ASM_OP;
 	} else if (op == ASSIGN) {
 		// x = y
 		if (!(binary->x->type == STORE_EXPR && binary->x->data.store.kind == VARIABLE)) {
 			send_error(&binary->oppos, ERR,
 				"Expected variable at lvalue of assign expression");
+			return 0;
 		}
 
-		scan_expr(binary->y, n);
-		*n += ASM_OP;
+		return expr_size(binary->y) + ASM_OP;
 	} else if (op >= MUL_ASSIGN && op <= OR_ASSIGN) {
 		// x = x OP y
 		if (!(binary->x->type == STORE_EXPR && binary->x->data.store.kind == VARIABLE)) {
 			send_error(&binary->oppos, ERR,
 				"Expected variable at lvalue of assign expression");
+			return 0;
 		}
 
-		*n += ASM_OP;
-		scan_expr(binary->y, n);
-		*n += ASM_OP + ASM_OP;
+		return ASM_OP +  expr_size(binary->y) + ASM_OP + ASM_OP;
 	} else if (op == COMMA) {
 		// x y
-		scan_expr(binary->x, n);
-		*n += ASM_OP;
-		scan_expr(binary->y, n);
+		return expr_size(binary->x) +
+			ASM_OP +
+			expr_size(binary->y);
 	} else if (op == SEND) {
 		// x <- y
 		send_error(&binary->oppos, ERR,
 			"Send operation found nested within expression");
+		return 0;
 	} else {
 		send_error(&binary->oppos, FATAL,
 			"Parser bug: Malformed binary expression");
+		return 0;
 	}
 }
 
@@ -502,13 +503,14 @@ static uint8_t *compile_binary_expr(const struct expr *expr,
 	}
 }
 
-static void scan_cond_expr(const struct expr *expr, size_t *n)
+static size_t cond_expr_size(const struct expr *expr)
 {
-	scan_expr(expr->data.cond.cond, n);
-	*n += ASM_JMP;
-	scan_expr(expr->data.cond.when, n);
-	*n += ASM_JMP;
-	scan_expr(expr->data.cond.otherwise, n);
+	return
+		expr_size(expr->data.cond.cond) +
+		ASM_JMP +
+		expr_size(expr->data.cond.when) +
+		ASM_JMP +
+		expr_size(expr->data.cond.otherwise);
 }
 
 static uint8_t *compile_cond_expr(const struct expr *expr,
@@ -526,36 +528,32 @@ static uint8_t *compile_cond_expr(const struct expr *expr,
 	return buf;
 }
 
-static void scan_expr(const struct expr *expr, size_t *n)
+static size_t expr_size(const struct expr *expr)
 {
 	switch (expr->type) {
 	case BAD_EXPR:
 		send_error(&expr->data.bad.start, FATAL, "Parser bug: Bad expression");
-		break;
+		return 0;
 	case NUM_LIT_EXPR:
-		*n += ASM_PUSH;
-		break;
+		return ASM_PUSH;
 	case PAREN_EXPR:
-		scan_expr(expr->data.paren.x, n);
-		break;
+		return expr_size(expr->data.paren.x);
 	case UNARY_EXPR:
-		scan_unary_expr(expr, n);
-		break;
+		return unary_expr_size(expr);
 	case BINARY_EXPR:
-		scan_binary_expr(expr, n);
-		break;
+		return binary_expr_size(expr);
 	case COND_EXPR:
-		scan_cond_expr(expr, n);
-		break;
+		return cond_expr_size(expr);
 	case STORE_EXPR:
 		if (expr->data.store.kind == PORT) {
 			send_error(&expr->data.store.start, ERR,
 				"Unexpected port found within expression");
 		}
 
-		*n += ASM_OP;
-		break;
+		return ASM_OP;
 	}
+
+	errx(1, "Unforseen expression.");
 }
 
 static uint8_t *compile_expr(const struct expr *expr,
@@ -584,11 +582,10 @@ static uint8_t *compile_expr(const struct expr *expr,
 	errx(1, "Unforseen expression.");
 }
 
-static void scan_expr_stmt(const struct stmt *stmt, size_t *n)
+static size_t expr_stmt_size(const struct stmt *stmt)
 {
-	scan_expr(stmt->data.expr.x, n);
-	*n += ASM_OP;
-	return;
+	return expr_size(stmt->data.expr.x) +
+		ASM_OP;
 }
 
 static uint8_t *compile_expr_stmt(const struct stmt *stmt,
@@ -630,11 +627,15 @@ static uint8_t *compile_branch_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_block_stmt(const struct stmt *stmt, size_t *n)
+static size_t block_stmt_size(const struct stmt *stmt)
 {
+	size_t result = 0;
+
 	for (size_t i = 0; i < stmt->data.block.nstmts; i++) {
-		scan_stmt(stmt->data.block.stmt_list[i], n);
+		result += stmt_size(stmt->data.block.stmt_list[i]);
 	}
+
+	return result;
 }
 
 static uint8_t *compile_block_stmt(const struct stmt *stmt,
@@ -648,25 +649,27 @@ static uint8_t *compile_block_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_if_stmt(const struct stmt *stmt, size_t *n)
+static size_t if_stmt_size(const struct stmt *stmt)
 {
-	scan_expr(stmt->data.if_stmt.cond, n);
-	*n += ASM_JMP;
-	scan_stmt(stmt->data.if_stmt.body, n);
+	size_t result =  expr_size(stmt->data.if_stmt.cond) +
+		ASM_JMP +
+		stmt_size(stmt->data.if_stmt.body);
 
 	if (stmt->data.if_stmt.otherwise != NULL) {
-		*n += ASM_JMP;
-		scan_stmt(stmt->data.if_stmt.otherwise, n);
+		result += ASM_JMP +
+			stmt_size(stmt->data.if_stmt.otherwise);
 	}
+
+	return result;
 }
 
 static uint8_t *compile_if_stmt(const struct stmt *stmt,
 	struct context *ctx, uint8_t *buf)
 {
 	// Address to jump if the condition is false
-	uint8_t *addr_false;
+	uint8_t *addr_false = NULL;
 	// The end of the if statement
-	uint8_t *addr_end;
+	uint8_t *addr_end = NULL;
 
 	// if (cond)
 	buf = compile_expr(stmt->data.if_stmt.cond, ctx, buf);
@@ -691,30 +694,33 @@ static uint8_t *compile_if_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_loop_stmt(const struct stmt *stmt, size_t *n)
+static size_t loop_stmt_size(const struct stmt *stmt)
 {
+	size_t result = 0;
 	const struct loop_stmt *loop = &stmt->data.loop;
 
 	if (loop->init != NULL)
-		scan_stmt(loop->init, n);
+		result += stmt_size(loop->init);
 
 	if (loop->exec_body_first) {
 		// do { ... } while ( ... );
-		scan_stmt(loop->body, n);
-		scan_expr(loop->cond, n);
-		*n += ASM_JMP;
+		result += stmt_size(loop->body) +
+			expr_size(loop->cond) +
+			ASM_JMP;
 	} else {
 		// while ( ... ) { ... }
-		scan_expr(loop->cond, n);
-		*n += ASM_JMP;
-		scan_stmt(loop->body, n);
+		result += expr_size(loop->cond) +
+			ASM_JMP +
+			stmt_size(loop->body);
 
 		if (loop->post != NULL) {
-			scan_stmt(loop->post, n);
+			result += stmt_size(loop->post);
 		}
 
-		*n += ASM_JMP;
+		result += ASM_JMP;
 	}
+
+	return result;
 }
 
 static uint8_t *compile_loop_stmt(const struct stmt *stmt,
@@ -760,22 +766,23 @@ static uint8_t *compile_loop_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_send_stmt(const struct stmt *stmt, size_t *n)
+static size_t send_stmt_size(const struct stmt *stmt)
 {
 	const struct store_expr *dest = &stmt->data.send.dest;
 	const struct expr *src = stmt->data.send.src;
 
 	if (src->type == STORE_EXPR && src->data.store.kind == PORT) {
 		// %port|$var <- %port
-		*n += ASM_RECV;
+		return ASM_RECV;
 	} else if (dest->kind == PORT) {
 		// %port <- expr
-		scan_expr(src, n);
-		*n += ASM_OP;
+		return expr_size(src) +
+			ASM_OP;
 	} else {
 		// $var <- expr; doesn't make sense
 		send_error(&stmt->data.send.oppos, ERR,
 			"Expected dest or source to be a port");
+		return 0;
 	}
 }
 
@@ -799,50 +806,43 @@ static uint8_t *compile_send_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_stmt(const struct stmt *stmt, size_t *n)
+static size_t stmt_size(const struct stmt *stmt)
 {
 	switch (stmt->type) {
 	case BAD_STMT:
 		send_error(&stmt->data.bad.start, FATAL, "Bad statement");
-		break;
+		return 0;
 	case EMPTY_STMT:
-		*n += ASM_OP;
-		break;
+		return ASM_OP;
 	case LABELED_STMT:
-		scan_stmt(stmt->data.labeled.stmt, n);
-		break;
+		return stmt_size(stmt->data.labeled.stmt);
 	case EXPR_STMT:
-		scan_expr_stmt(stmt, n);
-		break;
+		return expr_stmt_size(stmt);
 	case BRANCH_STMT:
-		*n += ASM_JMP;
-		break;
+		return ASM_JMP;
 	case BLOCK_STMT:
-		scan_block_stmt(stmt, n);
-		break;
+		return block_stmt_size(stmt);
 	case IF_STMT:
-		scan_if_stmt(stmt, n);
-		break;
+		return if_stmt_size(stmt);
 	case CASE_CLAUSE:
 		// TODO
 		send_error(&stmt->data.case_clause.start, ERR,
 			"Case clauses are currently unsupported");
-		break;
+		return 0;
 	case SWITCH_STMT:
 		// TODO
 		send_error(&stmt->data.switch_stmt.start, ERR,
 			"Switch statements are currently unsupported");
-		break;
+		return 0;
 	case LOOP_STMT:
-		scan_loop_stmt(stmt, n);
-		break;
+		return loop_stmt_size(stmt);
 	case SEND_STMT:
-		scan_send_stmt(stmt, n);
-		break;
+		return send_stmt_size(stmt);
 	case HALT_STMT:
-		*n += ASM_OP;
-		break;
+		return ASM_OP;
 	}
+
+	errx(1, "Unforseen statement");
 }
 
 static uint8_t *compile_stmt(const struct stmt *stmt,
@@ -884,49 +884,30 @@ static uint8_t *compile_stmt(const struct stmt *stmt,
 		return asm_op(OP_HALT, buf);
 	}
 
-	errx(1, "Unforseen expression.");
+	errx(1, "Unforseen statement");
 }
 
-uint8_t *compile(const struct proc_decl *proc, uint16_t *n)
+// Return the size of the bytecode that the processor will produce. If
+// the return value is greater than UINT16_MAX, errno will also be set
+// to ERANGE.
+size_t bytecode_size(const struct proc_decl *d)
 {
-	size_t size = 0; // Complete size of the program
+	size_t size = stmt_size(d->body);
+	if (size > UINT16_MAX)
+		errno = ERANGE;
+
+	return size;
+}
+
+// Compile the entire bytecode and return the end of the buffer's
+// result (e.g. if 1 byte was compiled, the return result buf+1).
+uint8_t *compile(const struct proc_decl *d, uint8_t *buf)
+{
 	struct context ctx;
-	uint8_t *code, *end;
 
-	scan_stmt(proc->body, &size);
-
-	if (has_errors()) {
-		*n = 0;
-		return NULL;
-	}
-
-	if (size > UINT16_MAX) {
-		send_error(&proc->start, ERR,
-			"Node is too complex; compilation can't fit within %d bytes",
-			UINT16_MAX);
-
-		*n = 0;
-		return NULL;
-	}
-
-	code = ecalloc(size, sizeof(*code));
-	init_context(&ctx, code);
-	end = compile_stmt(proc->body, &ctx, code);
+	init_context(&ctx, buf);
+	buf = compile_stmt(d->body, &ctx, buf);
 	resolve_gotos(&ctx);
 
-	// Safety-check
-	if ((size_t)(end-code) > size) {
-		errx(1, "Compiler error: Buffer overflow.");
-	} else if ((size_t)(end-code) < size) {
-		errx(1, "Compiler error: Buffer underwrite.");
-	}
-
-	if (has_errors()) {
-		free(code);
-		*n = 0;
-		return NULL;
-	} else {
-		*n = (uint16_t)size;
-		return code;
-	}
+	return buf;
 }

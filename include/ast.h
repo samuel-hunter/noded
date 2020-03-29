@@ -247,6 +247,7 @@ void clear_parser(struct parser *parser);
 
 
 // compiler.c
-uint8_t *compile(const struct proc_decl *s, uint16_t *n);
+size_t bytecode_size(const struct proc_decl *d);
+uint8_t *compile(const struct proc_decl *d, uint8_t *n);
 
 #endif // AST_H

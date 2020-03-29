@@ -168,7 +168,6 @@ struct parser {
 
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...);
-bool has_errors(void);
 
 
 // err.c

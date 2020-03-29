@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <err.h>
+#include <errno.h>
 
 #include "noded.h"
 #include "ast.h"
@@ -52,7 +53,7 @@ void send_error(const struct position *pos, enum error_type type,
 	}
 }
 
-bool has_errors(void)
+static bool has_errors(void)
 {
 	return Globals.errors > 0;
 }
@@ -90,6 +91,9 @@ static uint8_t handle_recv(int port, void *dat)
 int main(int argc, char **argv)
 {
 	struct parser parser;
+	struct decl *decl;
+	size_t code_size;
+	uint8_t *code;
 
 	// Noded requires a file, it shouldn't just be stdin.
 	if (argc != 2) {
@@ -104,21 +108,29 @@ int main(int argc, char **argv)
 
 	// Scan the file token-by-token
 	init_parser(&parser, Globals.f);
+	decl = parse_decl(&parser);
+	clear_parser(&parser);
 
-	struct decl *decl = parse_decl(&parser);
-	if (has_errors()) {
+	if (has_errors())
 		return 1;
-	}
 
 	if (decl->type != PROC_DECL) {
 		fprintf(stderr, "Expected proc decl\n");
 		return 1;
 	}
 
-	uint16_t code_size;
-	uint8_t *code = compile(&decl->data.proc, &code_size);
+	errno = 0; // Reset errno
+	code_size = bytecode_size(&decl->data.proc);
+	if (errno == ERANGE) {
+		send_error(&decl->data.proc.start, FATAL,
+			"Node is too complex; the compiled bytecode is not "
+			"within a 16-bit range");
+	}
 
-	if (code == NULL || has_errors())
+	code = ecalloc(code_size, sizeof(*code));
+	compile(&decl->data.proc, code);
+
+	if (has_errors())
 		return 1;
 
 	// free the AST and parser, since we no longer need it.

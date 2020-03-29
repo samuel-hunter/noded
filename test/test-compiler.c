@@ -8,6 +8,7 @@
  * assumes that the VM is working properly.
  */
 #include <err.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,11 +47,6 @@ void send_error(const struct position *pos, enum error_type type,
 		exit(1);
 }
 
-bool has_errors(void)
-{
-	return Globals.has_error;
-}
-
 static void test_compiler(struct compiler_test *test)
 {
 	struct parser parser;
@@ -73,15 +69,32 @@ static void test_compiler(struct compiler_test *test)
 	Globals.f = f;
 	init_parser(&parser, f);
 	decl = parse_decl(&parser);
-	if (has_errors())
+	if (Globals.has_error)
 		exit(1);
 
 	if (decl->type != PROC_DECL) {
 		errx(1, "Expected proc decl\n");
 	}
 
-	vmtest.code = compile(&decl->data.proc, &vmtest.code_size);
-	if (has_errors() || vmtest.code == NULL) {
+	errno = 0;
+	vmtest.code_size = bytecode_size(&decl->data.proc);
+	if (errno == ERANGE) {
+		send_error(&decl->data.proc.start, FATAL,
+			"Node is too complex; the compiled bytecode is not "
+			"within a 16-bit range");
+	}
+
+	vmtest.code = ecalloc(vmtest.code_size, sizeof(*vmtest.code));
+	uint8_t *end = compile(&decl->data.proc, vmtest.code);
+
+	// Safety-check
+	if ((size_t)(end-vmtest.code) > vmtest.code_size) {
+		errx(1, "Compiler error: Buffer overflow.");
+	} else if ((size_t)(end-vmtest.code) < vmtest.code_size) {
+		errx(1, "Compiler error: Buffer underflow.");
+	}
+
+	if (Globals.has_error) {
 		exit(1);
 	}
 
