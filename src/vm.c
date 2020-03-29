@@ -4,6 +4,7 @@
  * vm includes the heartbeat of the program, and runs the executed
  * bytecode.
  */
+#include <assert.h>
 #include <err.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,30 +42,27 @@ void free_proc_node(struct proc_node *node)
 	free(node);
 }
 
-static void expand_stack(struct proc_node *node)
-{
-	node->stack_cap *= 2;
-	node->stack = erealloc(node->stack,
-	                       node->stack_cap * sizeof(*node->stack));
-}
-
 static void push(struct proc_node *node, uint8_t byte)
 {
-	if (node->stack_top == node->stack_cap)
-		expand_stack(node);
+	if (node->stack_top == node->stack_cap) {
+		// Expand the stack when necessary.
+		node->stack_cap *= 2;
+		node->stack = erealloc(node->stack,
+			node->stack_cap * sizeof(*node->stack));
+	}
 
 	node->stack[node->stack_top++] = byte;
 }
 
 static uint8_t peek(struct proc_node *node)
 {
-	// TODO: Should I add protection for peeking an empty stack?
+	assert(node->stack_top > 0); // Stack mustn't be empty.
 	return node->stack[node->stack_top-1];
 }
 
 static uint8_t pop(struct proc_node *node)
 {
-	// TODO: Should I add protection for popping off an empty stack?
+	assert(node->stack_top > 0); // Stack mustn't be empty.
 	return node->stack[--node->stack_top];
 }
 
@@ -250,5 +248,7 @@ void run(struct proc_node *node, void *handler_dat)
 			// Loop back around forever.
 			node->isp = 0;
 		}
+
+		assert(node->isp <= node->code_size);
 	}
 }

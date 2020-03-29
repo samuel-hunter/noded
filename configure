@@ -62,6 +62,8 @@ done
 
 if $debug_flags; then
     CFLAGS="$CFLAGS -g -O0"
+else
+    CFLAGS="$CFLAGS -DNDEBUG"
 fi
 
 echo "Prefix: $PREFIX"
