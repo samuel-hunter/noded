@@ -1,7 +1,7 @@
 .POSIX:
 .SUFFIXES:
 
-TARGET = noded
+TARGET = @@TARGET@@
 RM ?= rm -f
 
 CC = @@CC@@
@@ -18,5 +18,6 @@ include build.make
 
 clean:
 	$(RM) $(TARGET) $(TOOLS) $(TESTS) $(OBJECTS) $(OTHER_OBJS)
+	rmdir build
 
 .PHONY: default all tools test clean
