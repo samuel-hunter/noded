@@ -1,3 +1,6 @@
+/*
+ * compiler - compile an AST to bytecode
+ */
 #include <err.h>
 #include <stdlib.h>
 #include <string.h>

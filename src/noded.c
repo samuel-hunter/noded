@@ -1,3 +1,10 @@
+/*
+ * noded - noded interpreter
+ *
+ * noded currently assumes the first declaration to be a processor,
+ * compiles it, and runs the program. All SEND ops are sent as
+ * characters to stdout, and all RECV ops are read from stdin.
+ */
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>

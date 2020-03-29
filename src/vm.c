@@ -1,3 +1,9 @@
+/*
+ * vm - virtual machine execution
+ *
+ * vm includes the heartbeat of the program, and runs the executed
+ * bytecode.
+ */
 #include <err.h>
 #include <stdlib.h>
 #include <string.h>

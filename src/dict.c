@@ -1,11 +1,13 @@
-// dict.c -- symbol dictionary.
-//
-// Storing the string literals in the AST itself can be a bad
-// idea. Before this, AST nodes ranged from 1KB-4KB, and the 136-line
-// adder.nod example program came in at a whopping 348KB of space --
-// most of that space was from storing 1KB literal buffers. Right
-// after implementing it, the allocation space shrunk to 17KB+409B
-// (409B coming from the dict itself).
+/*
+ * dict - symbol dictionary
+ *
+ * Storing the string literals in the AST itself can be a bad
+ * idea. Before this, AST nodes ranged from 1KB-4KB, and the 136-line
+ * adder.nod example program came in at a whopping 348KB of space --
+ * most of that space was from storing 1KB literal buffers. Right
+ * after implementing it, the allocation space shrunk to 17KB+409B
+ * (409B coming from the dict itself).
+ */
 #include <stdlib.h>
 #include <string.h>
 

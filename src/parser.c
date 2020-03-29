@@ -1,3 +1,6 @@
+/*
+ * parser - AST generator
+ */
 #include <errno.h>
 #include <stdarg.h>
 #include <stdint.h>

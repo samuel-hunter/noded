@@ -1,3 +1,6 @@
+/*
+ * scanner - stream to tokens
+ */
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>

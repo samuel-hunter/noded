@@ -1,3 +1,16 @@
+/*
+ * err - error handling
+ *
+ * send_error(), the actual error-handling function, is noticeably
+ * missing from here. Instead of passing down a function pointer to
+ * every nontrivial module (scanning, parsing, compiling), it's much
+ * simpler for each module to just call that handler outright.
+ *
+ * So, packed in noded.c and every tool, is their own implementation
+ * of send_error(). Each program is still allowed to handle the error
+ * in their own way, e.g. the tests can immediately exit on the first
+ * error.
+ */
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>

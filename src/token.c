@@ -1,3 +1,10 @@
+/*
+ * token - token utilities
+ *
+ * token includes token introspection like its name, whether it's a
+ * keyword, and some AST-supporting properties such as its precedence
+ * or whether it's a specific token type.
+ */
 #include <string.h>
 
 #include "noded.h"

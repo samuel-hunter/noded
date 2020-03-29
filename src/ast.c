@@ -1,3 +1,11 @@
+/*
+ * ast - Abstract Syntax Tree
+ *
+ * ast provides conveniences when handling ast's, and a little bit of
+ * introspection. Its main features are mapping each {expr,stmt,decl}
+ * to a human-readable string, walking through the elements, and
+ * freeing them.
+ */
 #include <stdlib.h>
 #include <string.h>
 

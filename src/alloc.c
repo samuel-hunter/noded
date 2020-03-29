@@ -1,5 +1,5 @@
 /*
- * alloc.c -- stdlib allocation wrapped in pointer-checking.
+ * alloc -- stdlib allocation wrapped in pointer-checking
  *
  * In a C library, memory allocation would (best) be left to the
  * library-caller itself, or (second-best) be given a function pointer

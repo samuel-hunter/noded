@@ -1,3 +1,12 @@
+/*
+ * test-compiler - compiler validation
+ *
+ * This program ensures that various code structures are compiled
+ * correctly. Because the same code can produce different, yet equally
+ * valid results, the test framework runs the program and sees if the
+ * producing send/recv messages are expected. As such, it implicitly
+ * assumes that the VM is working properly.
+ */
 #include <err.h>
 #include <stdarg.h>
 #include <stdio.h>

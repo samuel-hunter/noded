@@ -1,3 +1,9 @@
+/*
+ * test-vm - virtual machine validation
+ *
+ * test-vm takes bytecode, feeds it numbers for RECV ops, and ensures
+ * that it sends back the expected SEND ops.
+ */
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
