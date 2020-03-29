@@ -3,10 +3,11 @@ set -e
 
 # Defaults
 [ -z "$CC" ] && CC="cc"
-[ -z "$CFLAGS" ] && CFLAGS="--std=c99 -Werror -Wall -Wextra -Wpedantic -D_DEFAULT_SOURCE"
+[ -z "$CFLAGS" ] && CFLAGS="--std=c99 -Werror -Wall -Wextra -Wpedantic -O2 -D_DEFAULT_SOURCE"
 [ -z "$LDFLAGS" ] && LDFLAGS=""
 
 includes="include/noded.h include/ast.h include/bytecode.h test/vm-framework.h"
+debug_flags=false
 
 bins () {
     mktarget src/noded src/err src/token src/scanner src/ast \
@@ -30,6 +31,9 @@ for i in "$@"; do
         LDFLAGS=*)
             LDFLAGS="${i#*=}"
             ;;
+        --debug)
+            debug_flags=true
+            ;;
         --help | -h)
             cat <<EOF
 Noded programming language configuration program.
@@ -43,6 +47,8 @@ Variables that will be exported to the makefile:
     LDFLAGS            The C link flags.
                        (default: none)
 Available options:
+    --debug            Append debug flags to the compiler
+
     --help             Shows this help.
 EOF
             exit 0
@@ -54,6 +60,9 @@ EOF
     esac
 done
 
+if $debug_flags; then
+    CFLAGS="$CFLAGS -g -O0"
+fi
 
 echo "Prefix: $PREFIX"
 echo "CC=$CC"
