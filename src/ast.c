@@ -16,7 +16,6 @@
 static const char *exprs[] = {
 	[BAD_EXPR]     = "BadExpr",
 	[NUM_LIT_EXPR] = "NumLitExpr",
-	[PAREN_EXPR]   = "ParenExpr",
 	[UNARY_EXPR]   = "UnaryExpr",
 	[BINARY_EXPR]  = "BinaryExpr",
 	[COND_EXPR]    = "CondExpr",
@@ -91,9 +90,6 @@ static void walk_expr_(expr_func func, struct expr *e, void *dat,
 
 	// Walk through the children...
 	switch (e->type) {
-	case PAREN_EXPR:
-		walk_expr_(func, e->data.paren.x, dat, depth+1, order);
-		break;
 	case UNARY_EXPR:
 		walk_expr_(func, e->data.unary.x, dat, depth+1, order);
 		break;

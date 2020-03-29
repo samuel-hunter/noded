@@ -7,8 +7,8 @@
 
 struct expr {
 	enum expr_type {
-		BAD_EXPR, NUM_LIT_EXPR, PAREN_EXPR,
-		UNARY_EXPR, BINARY_EXPR, COND_EXPR, STORE_EXPR
+		BAD_EXPR, NUM_LIT_EXPR, UNARY_EXPR,
+		BINARY_EXPR, COND_EXPR, STORE_EXPR
 	} type;
 	union {
 		struct bad_expr {
@@ -19,11 +19,6 @@ struct expr {
 			struct position start;
 			uint8_t value;
 		} num_lit;
-
-		struct paren_expr {
-			struct position start;
-			struct expr *x;
-		} paren;
 
 		struct unary_expr {
 			struct position start;

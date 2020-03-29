@@ -411,11 +411,9 @@ static struct expr *parse_primary_expr(struct parser *p)
 	case CHAR:
 		return parse_num_lit_expr(p);
 	case LPAREN:
-		result = new_expr(PAREN_EXPR);
-		result->data.paren.start = p->current.pos;
-		next(p);                              // (
-		result->data.paren.x = parse_expr(p); // ...
-		expect(p, RPAREN, NULL);              // )
+		next(p);                 // (
+		result = parse_expr(p);  // ...
+		expect(p, RPAREN, NULL); // )
 		return result;
 	case VARIABLE:
 	case PORT:

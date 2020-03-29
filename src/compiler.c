@@ -536,8 +536,6 @@ static size_t expr_size(const struct expr *expr)
 		return 0;
 	case NUM_LIT_EXPR:
 		return ASM_PUSH;
-	case PAREN_EXPR:
-		return expr_size(expr->data.paren.x);
 	case UNARY_EXPR:
 		return unary_expr_size(expr);
 	case BINARY_EXPR:
@@ -565,8 +563,6 @@ static uint8_t *compile_expr(const struct expr *expr,
 		return NULL; // send_error should stop execution
 	case NUM_LIT_EXPR:
 		return asm_push(expr->data.num_lit.value, buf);
-	case PAREN_EXPR:
-		return compile_expr(expr->data.paren.x, ctx, buf);
 	case UNARY_EXPR:
 		return compile_unary_expr(expr, ctx, buf);
 	case BINARY_EXPR:
