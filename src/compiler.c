@@ -25,12 +25,23 @@ struct context {
 	uint8_t nvars;
 	uint8_t nports;
 
+	// Vector of leftover addresses from goto statements to
+	// resolve at the end of compilation.
+	struct {
+		const struct position *pos; // Not owned.
+		size_t label_id;
+		uint8_t *addrbuf; // Not owned.
+	} *gotos;
+	size_t ngotos;
+	size_t gotos_cap;
+
+	// Vector of labels to resolve goto statments.
 	struct {
 		size_t label_id;
 		uint16_t addr;
 	} *labels;
 	size_t nlabels;
-	size_t labelcap;
+	size_t labels_cap;
 
 	// loop block handles information necessary for `break` and `continue`.
 	struct block {
@@ -53,7 +64,7 @@ struct context {
 };
 
 static void scan_expr(const struct expr *expr, size_t *n);
-static void scan_stmt(const struct stmt *stmt, struct context *ctx, size_t *n);
+static void scan_stmt(const struct stmt *stmt, size_t *n);
 
 static uint8_t *compile_expr(const struct expr *expr,
 	struct context *ctx, uint8_t *buf);
@@ -100,7 +111,11 @@ static uint8_t *asm_jump2(enum opcode code, uint8_t **addr, uint8_t *buf)
 {
 	*buf++ = code;
 	*addr = buf;
-	return buf + ASM_ADDR;
+
+	// Add in a nice value of 0xFFFF that can be very easily
+	// spot-checked to be an skipped address.
+	buf = asm_addr(UINT16_MAX, buf);
+	return buf;
 }
 
 // Assemble a receive statement.
@@ -119,11 +134,10 @@ static uint8_t *asm_recv(uint8_t dest_store, uint8_t src_store,
 
 // ---Context---
 
-static void init_context(struct context *ctx)
+static void init_context(struct context *ctx, uint8_t *start)
 {
 	memset(ctx, 0, sizeof(*ctx));
-	ctx->labelcap = 8;
-	ctx->labels = ecalloc(ctx->labelcap, sizeof(*ctx->labels));
+	ctx->start = start;
 }
 
 static uint8_t store(struct context *ctx, const struct store_expr *store)
@@ -164,48 +178,9 @@ static uint8_t store(struct context *ctx, const struct store_expr *store)
 	return (*nstores)++;
 }
 
-static uint16_t abs_addr(const struct context *ctx, uint8_t *buf)
+static uint16_t abs_addr(const struct context *ctx, const uint8_t *buf)
 {
 	return (uint16_t)(buf - ctx->start);
-}
-
-static void add_label(struct context *ctx,
-	const struct labeled_stmt *label, uint16_t addr)
-{
-	// First, check to see if the label already exists.
-	for (size_t i = 0; i < ctx->nlabels; i++) {
-		if (ctx->labels[i].label_id == label->label_id) {
-			send_error(&label->start, ERR,
-				"Label already defined elsewhere");
-			return;
-		}
-	}
-
-	if (ctx->nlabels == ctx->labelcap) {
-		ctx->labelcap *= 2;
-		ctx->labels = erealloc(ctx->labels,
-			ctx->labelcap * sizeof(*ctx->labels));
-	}
-
-	ctx->labels[ctx->nlabels].label_id = label->label_id;
-	ctx->labels[ctx->nlabels].addr = addr;
-	ctx->nlabels++;
-}
-
-static uint16_t label_addr(const struct context *ctx,
-	const struct branch_stmt *branch)
-{
-	// find the label in the associative array.
-	for (size_t i = 0; i < ctx->nlabels; i++) {
-		if (ctx->labels[i].label_id == branch->label_id) {
-			return ctx->labels[i].addr;
-		}
-	}
-
-	// label not found; send error and default value.
-	send_error(&branch->start, ERR,
-		"Label not defined");
-	return 0;
 }
 
 // Add a new block to the loop stack. Move the previous stack to *blk.
@@ -276,9 +251,92 @@ static void pop_stack(struct context *ctx, struct block *blk,
 	ctx->block = *blk;
 }
 
-static void clear_context(struct context *ctx)
+// Return a pointer to the label's address. If the pointer is NULL,
+// the label is not found. Otherwise, dereference this to find the
+// address value.
+static const uint16_t *label_addr(const struct context *ctx, size_t label_id)
 {
+	for (size_t i = 0; i < ctx->nlabels; i++) {
+		if (ctx->labels[i].label_id == label_id)
+			return &ctx->labels[i].addr;
+	}
+
+	return NULL;
+}
+
+// Register a goto statement to be handled later. Return a pointer to
+// write the pointer where the goto label's address should be stored.
+static uint8_t **add_goto(struct context *ctx, const struct branch_stmt *branch)
+{
+	if (!ctx->gotos) {
+		// Lazily allocate a vector only when needed (most
+		// processors probably will not have any goto's)
+		ctx->gotos_cap = 4;
+		ctx->gotos = ecalloc(ctx->gotos_cap,
+			sizeof(*ctx->gotos));
+	} else if (ctx->ngotos == ctx->gotos_cap) {
+		// Expand when necessary
+		ctx->gotos_cap *= 2;
+		ctx->gotos = erealloc(ctx->gotos,
+			ctx->gotos_cap*sizeof(*ctx->gotos));
+	}
+
+	ctx->gotos[ctx->ngotos].pos = &branch->start;
+	ctx->gotos[ctx->ngotos].label_id = branch->label_id;
+	return &ctx->gotos[ctx->ngotos++].addrbuf;
+}
+
+// Add a label to the label dictionary. They will be used at the end
+// to resolve all goto statements.
+static void add_label(struct context *ctx, const struct labeled_stmt *label,
+	const uint8_t *buf)
+{
+	// Make sure a label isn't twice-defined.
+	if (label_addr(ctx, label->label_id)) {
+		send_error(&label->start, ERR,
+			"Label defined multiple times");
+	}
+
+	if (!ctx->labels) {
+		// Lazily allocate a vector only when needed. (most
+		// processors probably will not have any labels)
+		ctx->labels_cap = 4;
+		ctx->labels = ecalloc(ctx->labels_cap,
+			sizeof(*ctx->labels));
+	} else if (ctx->nlabels == ctx->labels_cap) {
+		// Expand vector when necessary
+		ctx->labels_cap *= 2;
+		ctx->labels = erealloc(ctx->labels,
+			ctx->labels_cap*sizeof(*ctx->labels));
+	}
+
+	ctx->labels[ctx->nlabels].label_id = label->label_id;
+	ctx->labels[ctx->nlabels++].addr = abs_addr(ctx, buf);
+}
+
+// Fill in all empty addresses from GOTO statments with their
+// associated labels and clear all goto's and labels from memory.
+static void resolve_gotos(struct context *ctx)
+{
+	for (size_t i = 0; i < ctx->ngotos; i++) {
+		const uint16_t *addrptr =
+			label_addr(ctx, ctx->gotos[i].label_id);
+
+		if (addrptr == NULL) {
+			send_error(ctx->gotos[i].pos, ERR,
+				"Goto to undefined label");
+			continue;
+		}
+
+		asm_addr(*addrptr, ctx->gotos[i].addrbuf);
+	}
+
+	// All good! Free the label and goto vectors since we no
+	// longer need them.
+	free(ctx->gotos);
+	ctx->gotos = NULL;
 	free(ctx->labels);
+	ctx->labels = NULL;
 }
 
 // ---Scanning and Compilation---
@@ -559,23 +617,23 @@ static uint8_t *compile_branch_stmt(const struct stmt *stmt,
 		buf = asm_jump2(OP_JMP, add_break(ctx), buf);
 		break;
 	case GOTO:
-		buf = asm_jump(OP_JMP, label_addr(ctx, branch), buf);
+		buf = asm_jump2(OP_JMP, add_goto(ctx, branch), buf);
 		break;
 	case CONTINUE:
 		buf = asm_jump2(OP_JMP, add_continue(ctx), buf);
 		break;
 	default:
-		send_error(&stmt->data.branch.start, FATAL,
+		send_error(&branch->start, FATAL,
 			"Compiler bug: Malformed branch stmt");
 	}
 
 	return buf;
 }
 
-static void scan_block_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
+static void scan_block_stmt(const struct stmt *stmt, size_t *n)
 {
 	for (size_t i = 0; i < stmt->data.block.nstmts; i++) {
-		scan_stmt(stmt->data.block.stmt_list[i], ctx, n);
+		scan_stmt(stmt->data.block.stmt_list[i], n);
 	}
 }
 
@@ -590,15 +648,15 @@ static uint8_t *compile_block_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_if_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
+static void scan_if_stmt(const struct stmt *stmt, size_t *n)
 {
 	scan_expr(stmt->data.if_stmt.cond, n);
 	*n += ASM_JMP;
-	scan_stmt(stmt->data.if_stmt.body, ctx, n);
+	scan_stmt(stmt->data.if_stmt.body, n);
 
 	if (stmt->data.if_stmt.otherwise != NULL) {
 		*n += ASM_JMP;
-		scan_stmt(stmt->data.if_stmt.otherwise, ctx, n);
+		scan_stmt(stmt->data.if_stmt.otherwise, n);
 	}
 }
 
@@ -633,26 +691,26 @@ static uint8_t *compile_if_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_loop_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
+static void scan_loop_stmt(const struct stmt *stmt, size_t *n)
 {
 	const struct loop_stmt *loop = &stmt->data.loop;
 
 	if (loop->init != NULL)
-		scan_stmt(loop->init, ctx, n);
+		scan_stmt(loop->init, n);
 
 	if (loop->exec_body_first) {
 		// do { ... } while ( ... );
-		scan_stmt(loop->body, ctx, n);
+		scan_stmt(loop->body, n);
 		scan_expr(loop->cond, n);
 		*n += ASM_JMP;
 	} else {
 		// while ( ... ) { ... }
 		scan_expr(loop->cond, n);
 		*n += ASM_JMP;
-		scan_stmt(loop->body, ctx, n);
+		scan_stmt(loop->body, n);
 
 		if (loop->post != NULL) {
-			scan_stmt(loop->post, ctx, n);
+			scan_stmt(loop->post, n);
 		}
 
 		*n += ASM_JMP;
@@ -741,7 +799,7 @@ static uint8_t *compile_send_stmt(const struct stmt *stmt,
 	return buf;
 }
 
-static void scan_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
+static void scan_stmt(const struct stmt *stmt, size_t *n)
 {
 	switch (stmt->type) {
 	case BAD_STMT:
@@ -751,8 +809,7 @@ static void scan_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
 		*n += ASM_OP;
 		break;
 	case LABELED_STMT:
-		add_label(ctx, &stmt->data.labeled, (uint16_t)(*n));
-		scan_stmt(stmt->data.labeled.stmt, ctx, n);
+		scan_stmt(stmt->data.labeled.stmt, n);
 		break;
 	case EXPR_STMT:
 		scan_expr_stmt(stmt, n);
@@ -761,10 +818,10 @@ static void scan_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
 		*n += ASM_JMP;
 		break;
 	case BLOCK_STMT:
-		scan_block_stmt(stmt, ctx, n);
+		scan_block_stmt(stmt, n);
 		break;
 	case IF_STMT:
-		scan_if_stmt(stmt, ctx, n);
+		scan_if_stmt(stmt, n);
 		break;
 	case CASE_CLAUSE:
 		// TODO
@@ -777,7 +834,7 @@ static void scan_stmt(const struct stmt *stmt, struct context *ctx, size_t *n)
 			"Switch statements are currently unsupported");
 		break;
 	case LOOP_STMT:
-		scan_loop_stmt(stmt, ctx, n);
+		scan_loop_stmt(stmt, n);
 		break;
 	case SEND_STMT:
 		scan_send_stmt(stmt, n);
@@ -798,6 +855,7 @@ static uint8_t *compile_stmt(const struct stmt *stmt,
 	case EMPTY_STMT:
 		return asm_op(OP_NOOP, buf);
 	case LABELED_STMT:
+		add_label(ctx, &stmt->data.labeled, buf);
 		return compile_stmt(stmt->data.labeled.stmt, ctx, buf);
 	case EXPR_STMT:
 		buf = compile_expr_stmt(stmt, ctx, buf);
@@ -835,9 +893,7 @@ uint8_t *compile(const struct proc_decl *proc, uint16_t *n)
 	struct context ctx;
 	uint8_t *code, *end;
 
-	init_context(&ctx);
-
-	scan_stmt(proc->body, &ctx, &size);
+	scan_stmt(proc->body, &size);
 
 	if (has_errors()) {
 		*n = 0;
@@ -854,8 +910,9 @@ uint8_t *compile(const struct proc_decl *proc, uint16_t *n)
 	}
 
 	code = ecalloc(size, sizeof(*code));
-	ctx.start = code;
+	init_context(&ctx, code);
 	end = compile_stmt(proc->body, &ctx, code);
+	resolve_gotos(&ctx);
 
 	// Safety-check
 	if ((size_t)(end-code) > size) {
@@ -863,8 +920,6 @@ uint8_t *compile(const struct proc_decl *proc, uint16_t *n)
 	} else if ((size_t)(end-code) < size) {
 		errx(1, "Compiler error: Buffer underwrite.");
 	}
-
-	clear_context(&ctx);
 
 	if (has_errors()) {
 		free(code);
