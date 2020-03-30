@@ -622,29 +622,29 @@ static struct stmt *parse_block_stmt(struct parser *p)
 
 	size_t nstmts = 0;
 	size_t cap = 1;
-	struct stmt **stmt_list = ecalloc(cap, sizeof(*stmt_list));
+	struct stmt **stmts = ecalloc(cap, sizeof(*stmts));
 
 	expect(p, LBRACE, &start);
 	while (p->current.tok != RBRACE && p->current.tok != TOK_EOF) {
 		if (nstmts == cap) {
 			cap *= 2;
-			stmt_list = erealloc(stmt_list, cap * sizeof(*stmt_list));
+			stmts = erealloc(stmts, cap * sizeof(*stmts));
 		}
 
-		stmt_list[nstmts++] = parse_stmt(p);
+		stmts[nstmts++] = parse_stmt(p);
 	}
 	expect(p, RBRACE, NULL);
 
 	if (nstmts == 0) {
-		free(stmt_list);
-		stmt_list = NULL;
+		free(stmts);
+		stmts = NULL;
 	} else {
-		stmt_list = erealloc(stmt_list, nstmts * sizeof(*stmt_list));
+		stmts = erealloc(stmts, nstmts * sizeof(*stmts));
 	}
 
 	result = new_stmt(BLOCK_STMT);
 	result->data.block.start = start.pos;
-	result->data.block.stmt_list = stmt_list;
+	result->data.block.stmts = stmts;
 	result->data.block.nstmts = nstmts;
 	return result;
 }
@@ -701,16 +701,21 @@ static struct stmt *parse_case_clause(struct parser *p)
 
 static struct stmt *parse_switch_stmt(struct parser *p)
 {
-	struct fulltoken keyword;
 	struct stmt *result = new_stmt(SWITCH_STMT);
+	struct fulltoken keyword;
+	struct stmt *block;
 
 	expect(p, SWITCH, &keyword); // switch
+	result->data.switch_stmt.start = keyword.pos;
 	expect(p, LPAREN, NULL);     // (
 	result->data.switch_stmt.tag = parse_expr(p);
 	expect(p, RPAREN, NULL);     // )
-	result->data.switch_stmt.body = parse_block_stmt(p);
 
-	result->data.switch_stmt.start = keyword.pos;
+	block = parse_block_stmt(p); // { ... }
+	result->data.switch_stmt.stmts = block->data.block.stmts;
+	result->data.switch_stmt.nstmts = block->data.block.nstmts;
+
+	free(block); // Free the block node without freeing its children.
 	return result;
 }
 

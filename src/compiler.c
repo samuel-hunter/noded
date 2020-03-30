@@ -46,6 +46,7 @@ struct context {
 
 	// loop block handles information necessary for `break` and `continue`.
 	struct block {
+		enum stmt_type type;
 		bool is_stack;
 
 		// for `continue`, addresses to be filled at the end
@@ -185,11 +186,12 @@ static uint16_t abs_addr(const struct context *ctx, const uint8_t *buf)
 }
 
 // Add a new block to the loop stack. Move the previous stack to *blk.
-static void push_stack(struct context *ctx, struct block *blk)
+static void push_stack(struct context *ctx, struct block *blk, enum stmt_type type)
 {
 	*blk = ctx->block;
 	memset(&ctx->block, 0, sizeof(ctx->block));
 	ctx->block.is_stack = true;
+	ctx->block.type = type;
 }
 
 // Reserve room for a pointer to the code, and return its address.
@@ -209,8 +211,13 @@ static uint8_t **add_break(struct context *ctx)
 }
 
 // Reserve room for a pointer to the code, and return its address.
-static uint8_t **add_continue(struct context *ctx)
+static uint8_t **add_continue(struct context *ctx, const struct branch_stmt *branch)
 {
+	if (ctx->block.type == SWITCH_STMT) {
+		send_error(&branch->start, ERR,
+			"No continue statements allowed within a switch block");
+	}
+
 	if (ctx->block.ncontinues == ctx->block.continue_cap) {
 		if (ctx->block.continue_cap == 0) {
 			ctx->block.continue_cap = 8;
@@ -239,14 +246,16 @@ static void pop_stack(struct context *ctx, struct block *blk,
 	for (size_t i = 0; i < ctx->block.nbreaks; i++) {
 		asm_addr(break_addr, ctx->block.breaks[i]);
 	}
-	free(ctx->block.breaks);
+	if (ctx->block.breaks) free(ctx->block.breaks);
 
-	// Ditto with continue
-	uint16_t continue_addr = abs_addr(ctx, continuepoint);
-	for (size_t i = 0; i < ctx->block.ncontinues; i++) {
-		asm_addr(continue_addr, ctx->block.continues[i]);
+	// Ditto with continue.
+	if (ctx->block.type != SWITCH_STMT) {
+		uint16_t continue_addr = abs_addr(ctx, continuepoint);
+		for (size_t i = 0; i < ctx->block.ncontinues; i++) {
+			asm_addr(continue_addr, ctx->block.continues[i]);
+		}
+		if (ctx->block.continues) free(ctx->block.continues);
 	}
-	free(ctx->block.continues);
 
 	// Restore the previous stack
 	ctx->block = *blk;
@@ -613,7 +622,7 @@ static uint8_t *compile_branch_stmt(const struct stmt *stmt,
 		buf = asm_jump2(OP_JMP, add_goto(ctx, branch), buf);
 		break;
 	case CONTINUE:
-		buf = asm_jump2(OP_JMP, add_continue(ctx), buf);
+		buf = asm_jump2(OP_JMP, add_continue(ctx, branch), buf);
 		break;
 	default:
 		send_error(&branch->start, FATAL,
@@ -628,7 +637,7 @@ static size_t block_stmt_size(const struct stmt *stmt)
 	size_t result = 0;
 
 	for (size_t i = 0; i < stmt->data.block.nstmts; i++) {
-		result += stmt_size(stmt->data.block.stmt_list[i]);
+		result += stmt_size(stmt->data.block.stmts[i]);
 	}
 
 	return result;
@@ -638,7 +647,7 @@ static uint8_t *compile_block_stmt(const struct stmt *stmt,
 	struct context *ctx, uint8_t *buf)
 {
 	for (size_t i = 0; i < stmt->data.block.nstmts; i++) {
-		struct stmt *s = stmt->data.block.stmt_list[i];
+		struct stmt *s = stmt->data.block.stmts[i];
 		buf = compile_stmt(s, ctx, buf);
 	}
 
@@ -647,7 +656,7 @@ static uint8_t *compile_block_stmt(const struct stmt *stmt,
 
 static size_t if_stmt_size(const struct stmt *stmt)
 {
-	size_t result =  expr_size(stmt->data.if_stmt.cond) +
+	size_t result = expr_size(stmt->data.if_stmt.cond) +
 		ASM_JMP +
 		stmt_size(stmt->data.if_stmt.body);
 
@@ -687,6 +696,112 @@ static uint8_t *compile_if_stmt(const struct stmt *stmt,
 		asm_addr(abs_addr(ctx, buf), addr_end);
 	}
 
+	return buf;
+}
+
+static size_t switch_stmt_size(const struct stmt *stmt)
+{
+	const struct switch_stmt *switch_ = &stmt->data.switch_stmt;
+	size_t i = 0;
+	size_t result = 0;
+
+	if (switch_->nstmts > 0 && switch_->stmts[0]->type != CASE_CLAUSE) {
+		// TODO implement a generic stmt_pos function to
+		// redirect this to the offending statement.
+		send_error(&switch_->start, ERR,
+			"Switch block does not begin with case clause");
+	}
+
+	// switch (tag) {
+	result += expr_size(switch_->tag);
+
+	while (i < switch_->nstmts) {
+		const struct case_clause *clause =
+			&switch_->stmts[i]->data.case_clause;
+
+		if (!clause->is_default) {
+			result += ASM_OP + ASM_PUSH + ASM_OP +
+				ASM_JMP;
+		}
+
+		// body
+		for (i++; i < switch_->nstmts; i++) {
+			if (switch_->stmts[i]->type == CASE_CLAUSE) break;
+			result += stmt_size(switch_->stmts[i]);
+		}
+
+		result += ASM_JMP;
+	}
+
+	result += ASM_OP;
+	return result;
+}
+
+static uint8_t *compile_switch_stmt(const struct stmt *stmt,
+	struct context *ctx, uint8_t *buf)
+{
+	struct block block;
+	const struct switch_stmt *switch_ = &stmt->data.switch_stmt;
+	bool default_compiled = false;
+	uint8_t *next_clause_start = NULL;
+	size_t i = 0;
+
+	// TODO this switch statement can use some serious work
+	// allowing code to fall through naturally.
+
+	if (switch_->nstmts > 0 && switch_->stmts[0]->type != CASE_CLAUSE) {
+		// TODO implement a generic stmt_pos function to
+		// redirect this to the offending statement.
+		send_error(&switch_->start, FATAL,
+			"Switch block does not begin with case clause");
+	}
+
+	// switch (tag) {
+	buf = compile_expr(switch_->tag, ctx, buf);
+	push_stack(ctx, &block, stmt->type);
+
+	while (i < switch_->nstmts) {
+		const struct case_clause *clause =
+			&switch_->stmts[i]->data.case_clause;
+		uint8_t *fjmp_addrptr = NULL;
+
+		if (default_compiled) {
+			send_error(&clause->start, WARN,
+				"Redundant clause");
+		}
+
+		if (clause->is_default) {
+			default_compiled = true;
+		} else {
+			// case X:
+			buf = asm_op(OP_DUP, buf);
+			buf = asm_push(clause->x, buf);
+			buf = asm_op(OP_EQL, buf);
+			buf = asm_jump2(OP_FJMP, &fjmp_addrptr, buf);
+		}
+
+		if (next_clause_start)
+			asm_addr(abs_addr(ctx, buf), next_clause_start);
+
+		// body
+		for (i++; i < switch_->nstmts; i++) {
+			if (switch_->stmts[i]->type == CASE_CLAUSE) break;
+			buf = compile_stmt(switch_->stmts[i], ctx, buf);
+		}
+
+		// Skip to the next portion of the switch statement.
+		buf = asm_jump2(OP_JMP, &next_clause_start, buf);
+
+		if (fjmp_addrptr)
+			asm_addr(abs_addr(ctx, buf), fjmp_addrptr);
+	}
+
+	if (next_clause_start)
+		asm_addr(abs_addr(ctx, buf), next_clause_start);
+
+	// }
+	pop_stack(ctx, &block, buf, NULL);
+	buf = asm_op(OP_POP, buf);
 	return buf;
 }
 
@@ -730,7 +845,7 @@ static uint8_t *compile_loop_stmt(const struct stmt *stmt,
 	if (loop->init != NULL)
 		buf = compile_stmt(loop->init, ctx, buf);
 
-	push_stack(ctx, &blk);
+	push_stack(ctx, &blk, stmt->type);
 
 	start = continuepoint = buf;
 
@@ -821,15 +936,11 @@ static size_t stmt_size(const struct stmt *stmt)
 	case IF_STMT:
 		return if_stmt_size(stmt);
 	case CASE_CLAUSE:
-		// TODO
 		send_error(&stmt->data.case_clause.start, ERR,
-			"Case clauses are currently unsupported");
+			"Case clause found outside switch statement");
 		return 0;
 	case SWITCH_STMT:
-		// TODO
-		send_error(&stmt->data.switch_stmt.start, ERR,
-			"Switch statements are currently unsupported");
-		return 0;
+		return switch_stmt_size(stmt);
 	case LOOP_STMT:
 		return loop_stmt_size(stmt);
 	case SEND_STMT:
@@ -863,15 +974,11 @@ static uint8_t *compile_stmt(const struct stmt *stmt,
 	case IF_STMT:
 		return compile_if_stmt(stmt, ctx, buf);
 	case CASE_CLAUSE:
-		// TODO
 		send_error(&stmt->data.case_clause.start, FATAL,
-			"Unsupported statement");
+			"Case clause found outside switch statement");
 		return NULL; // Fatal send_error should stop execution
 	case SWITCH_STMT:
-		// TODO
-		send_error(&stmt->data.switch_stmt.start, FATAL,
-			"Unsupported statement");
-		return NULL; // Fatal send_error should stop execution
+		return compile_switch_stmt(stmt, ctx, buf);
 	case LOOP_STMT:
 		return compile_loop_stmt(stmt, ctx, buf);
 	case SEND_STMT:
@@ -886,13 +993,16 @@ static uint8_t *compile_stmt(const struct stmt *stmt,
 // Return the size of the bytecode that the processor will produce. If
 // the return value is greater than UINT16_MAX, errno will also be set
 // to ERANGE.
-size_t bytecode_size(const struct proc_decl *d)
+uint16_t bytecode_size(const struct proc_decl *d)
 {
 	size_t size = stmt_size(d->body);
-	if (size > UINT16_MAX)
-		errno = ERANGE;
+	if (size > UINT16_MAX) {
+		send_error(&d->start, ERR,
+			"Node is too complex; the compiled bytecode is not "
+			"within a 16-bit range");
+	}
 
-	return size;
+	return (uint16_t)size;
 }
 
 // Compile the entire bytecode and return the end of the buffer's

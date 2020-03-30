@@ -291,10 +291,10 @@ void scan(struct scanner *s, struct fulltoken *dest) {
 	enum token tok = ILLEGAL;
 	struct position start;
 	// By default, set the literal empty.
-	dest->lit[0] = '\0';
+	strcpy(dest->lit, "");
 scan_again:
-	start = s->pos;
 	skip_space(s);
+	start = s->pos;
 	if (isalpha(s->chr)) {
 		scan_identifier(s, dest->lit);
 		tok = lookup(dest->lit);

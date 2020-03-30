@@ -129,7 +129,7 @@ static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
 		break;
 	case BLOCK_STMT:
 		for (size_t i = 0; i < s->data.block.nstmts; i++) {
-			walk_stmt_(sfunc, efunc, s->data.block.stmt_list[i],
+			walk_stmt_(sfunc, efunc, s->data.block.stmts[i],
 			           dat, depth+1, order);
 		}
 		break;
@@ -148,10 +148,12 @@ static void walk_stmt_(stmt_func sfunc, expr_func efunc, struct stmt *s,
 	case SWITCH_STMT:
 		if (efunc) {
 			walk_expr_(efunc, s->data.switch_stmt.tag,
-			           dat, depth+1, order);
+				dat, depth+1, order);
 		}
-		walk_stmt_(sfunc, efunc, s->data.switch_stmt.body,
-		           dat, depth+1, order);
+		for (size_t i = 0; i < s->data.switch_stmt.nstmts; i++) {
+			walk_stmt_(sfunc, efunc, s->data.switch_stmt.stmts[i],
+				dat, depth+1, order);
+		}
 		break;
 	case LOOP_STMT:
 		if (s->data.loop.init) {
@@ -225,8 +227,11 @@ static void free_stmt_helper(struct stmt *s, void *dat, int depth)
 	(void)dat;
 	(void)depth;
 
-	if (s->type == BLOCK_STMT)
-		free(s->data.block.stmt_list);
+	if (s->type == BLOCK_STMT) {
+		free(s->data.block.stmts);
+	} else if (s->type == SWITCH_STMT) {
+		free(s->data.switch_stmt.stmts);
+	}
 
 	free(s);
 }

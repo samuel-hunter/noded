@@ -54,6 +54,7 @@ struct stmt {
 		BRANCH_STMT, BLOCK_STMT, IF_STMT, CASE_CLAUSE,
 		SWITCH_STMT, LOOP_STMT, SEND_STMT, HALT_STMT
 	} type;
+
 	union {
 		struct bad_stmt {
 			struct position start;
@@ -85,7 +86,7 @@ struct stmt {
 			struct position start;
 
 			// Array of struct stmt pointers
-			struct stmt **stmt_list;
+			struct stmt **stmts;
 			size_t nstmts;
 		} block;
 
@@ -105,7 +106,10 @@ struct stmt {
 		struct switch_stmt {
 			struct position start;
 			struct expr *tag;
-			struct stmt *body;
+
+			// Array of struct stmt pointers
+			struct stmt **stmts;
+			size_t nstmts;
 		} switch_stmt;
 
 		struct loop_stmt {
@@ -242,7 +246,7 @@ void clear_parser(struct parser *parser);
 
 
 // compiler.c
-size_t bytecode_size(const struct proc_decl *d);
+uint16_t bytecode_size(const struct proc_decl *d);
 uint8_t *compile(const struct proc_decl *d, uint8_t *n);
 
 #endif // AST_H

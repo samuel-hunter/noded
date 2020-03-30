@@ -121,11 +121,9 @@ int main(int argc, char **argv)
 
 	errno = 0; // Reset errno
 	code_size = bytecode_size(&decl->data.proc);
-	if (errno == ERANGE) {
-		send_error(&decl->data.proc.start, FATAL,
-			"Node is too complex; the compiled bytecode is not "
-			"within a 16-bit range");
-	}
+
+	if (has_errors())
+		return 1;
 
 	code = ecalloc(code_size, sizeof(*code));
 	compile(&decl->data.proc, code);

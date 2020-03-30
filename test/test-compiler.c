@@ -45,6 +45,8 @@ void send_error(const struct position *pos, enum error_type type,
 	// Send an exit if fatal.
 	if (type == FATAL)
 		exit(1);
+
+	Globals.has_error = 1;
 }
 
 static void test_compiler(struct compiler_test *test)
@@ -78,11 +80,9 @@ static void test_compiler(struct compiler_test *test)
 
 	errno = 0;
 	vmtest.code_size = bytecode_size(&decl->data.proc);
-	if (errno == ERANGE) {
-		send_error(&decl->data.proc.start, FATAL,
-			"Node is too complex; the compiled bytecode is not "
-			"within a 16-bit range");
-	}
+
+	if (Globals.has_error)
+		exit(1);
 
 	vmtest.code = ecalloc(vmtest.code_size, sizeof(*vmtest.code));
 	uint8_t *end = compile(&decl->data.proc, vmtest.code);
@@ -478,6 +478,72 @@ int main(void)
 		}
 	};
 	test_compiler(&test_continue);
+
+	const char *test_switch1_src =
+		"processor test {\n"
+		"    switch ($tag) {\n"
+		"    case 2:\n"
+		"        %out <- 20;\n"
+		"        break;\n"
+		"    case 5:\n"
+		"        %out <- 50;\n"
+		"        // Fallthrough\n"
+		"    case 3:\n"
+		"        %out <- 30;\n"
+		"        break;"
+		"    case 7:\n"
+		"        %out <- 70;\n"
+		"        break;\n"
+		"    }\n"
+		"    if (++$tag == 10) halt;\n"
+		"}\n";
+	uint8_t test_switch1_1s[] = {20, 30, 50, 30, 70};
+	struct compiler_test test_switch1 = {
+		.name = "Switch Test 1",
+		.src = test_switch1_src,
+		.ports = {
+			{
+				.send = test_switch1_1s,
+				.send_len = sizeof(test_switch1_1s)/
+				            sizeof(*test_switch1_1s)
+			}
+		}
+	};
+	test_compiler(&test_switch1);
+
+	const char *test_switch2_src =
+		"processor test {\n"
+		"    switch ($tag) {\n"
+		"    case 2:\n"
+		"        %out <- 20;\n"
+		"        break;\n"
+		"    case 3:\n"
+		"        %out <- 30;\n"
+		"        break;\n"
+		"    case 5:\n"
+		"        %out <- 50;\n"
+		"        break;\n"
+		"    case 7:\n"
+		"        %out <- 70;\n"
+		"        break;\n"
+		"    default:\n"
+		"        %out <- $tag;\n"
+		"    }\n"
+		"    if (++$tag == 10) halt;\n"
+		"}\n";
+	uint8_t test_switch2_1s[] = {0, 1, 20, 30, 4, 50, 6, 70, 8, 9};
+	struct compiler_test test_switch2 = {
+		.name = "Switch Test 2",
+		.src = test_switch2_src,
+		.ports = {
+			{
+				.send = test_switch2_1s,
+				.send_len = sizeof(test_switch2_1s)/
+				            sizeof(*test_switch2_1s)
+			}
+		}
+	};
+	test_compiler(&test_switch2);
 
 	printf("LGTM!\n");
 	return 0;
