@@ -26,6 +26,7 @@ struct compiler_test {
 };
 
 static struct {
+	struct symdict dict;
 	bool has_error;
 	const struct compiler_test *cur;
 	FILE *f;
@@ -69,7 +70,7 @@ static void test_compiler(struct compiler_test *test)
 	rewind(f);
 
 	Globals.f = f;
-	init_parser(&parser, f);
+	init_parser(&parser, f, &Globals.dict);
 	decl = parse_decl(&parser);
 	if (Globals.has_error)
 		exit(1);
@@ -78,24 +79,20 @@ static void test_compiler(struct compiler_test *test)
 		errx(1, "Expected proc decl\n");
 	}
 
-	errno = 0;
 	vmtest.code_size = bytecode_size(&decl->data.proc);
-
 	if (Globals.has_error)
 		exit(1);
 
 	vmtest.code = ecalloc(vmtest.code_size, sizeof(*vmtest.code));
 	uint8_t *end = compile(&decl->data.proc, vmtest.code);
+	if (Globals.has_error)
+		exit(1);
 
 	// Safety-check
 	if ((size_t)(end-vmtest.code) > vmtest.code_size) {
 		errx(1, "Compiler error: Buffer overflow.");
 	} else if ((size_t)(end-vmtest.code) < vmtest.code_size) {
 		errx(1, "Compiler error: Buffer underflow.");
-	}
-
-	if (Globals.has_error) {
-		exit(1);
 	}
 
 	vmtest.name = test->name;
@@ -546,5 +543,6 @@ int main(void)
 	test_compiler(&test_switch2);
 
 	printf("LGTM!\n");
+	clear_dict(&Globals.dict);
 	return 0;
 }

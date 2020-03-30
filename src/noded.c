@@ -90,10 +90,16 @@ static uint8_t handle_recv(int port, void *dat)
 
 int main(int argc, char **argv)
 {
+	struct symdict dict;
 	struct parser parser;
 	struct decl *decl;
+	struct proc_node node;
 	size_t code_size;
 	uint8_t *code;
+
+	// A dict can be freshly initialized by setting it to its zero
+	// value.
+	memset(&dict, 0, sizeof(dict));
 
 	// Noded requires a file, it shouldn't just be stdin.
 	if (argc != 2) {
@@ -107,9 +113,8 @@ int main(int argc, char **argv)
 		err(1, "Cannot open %s", Globals.filename);
 
 	// Scan the file token-by-token
-	init_parser(&parser, Globals.f);
+	init_parser(&parser, Globals.f, &dict);
 	decl = parse_decl(&parser);
-	clear_parser(&parser);
 
 	if (has_errors())
 		return 1;
@@ -119,7 +124,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	errno = 0; // Reset errno
 	code_size = bytecode_size(&decl->data.proc);
 
 	if (has_errors())
@@ -131,16 +135,18 @@ int main(int argc, char **argv)
 	if (has_errors())
 		return 1;
 
-	// free the AST and parser, since we no longer need it.
+	// free the AST and dict, since we no longer need it.
 	free_decl(decl);
-	clear_parser(&parser);
+	clear_dict(&dict);
 	fclose(Globals.f);
 
 	// Give ownership of code to proc node.
-	struct proc_node *node = new_proc_node(code, code_size,
+	init_proc_node(&node, code, code_size,
 		&handle_send, &handle_recv);
-	run(node, NULL);
-	free_proc_node(node);
+
+	// Run and exit.
+	run(&node, NULL);
+	clear_proc_node(&node);
 
 	return 0;
 }

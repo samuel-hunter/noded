@@ -49,6 +49,7 @@ void send_error(const struct position *pos, enum error_type type,
 
 int main(int argc, char **argv)
 {
+	struct symdict dict;
 	struct parser parser;
 
 	// This program doesn't accept any arguments.
@@ -58,7 +59,8 @@ int main(int argc, char **argv)
 	}
 
 	// Scan the file token-by-token
-	init_parser(&parser, stdin);
+	memset(&dict, 0, sizeof(dict));
+	init_parser(&parser, stdin, &dict);
 
 	struct decl *decl = parse_decl(&parser);
 	if (errors > 0) {
@@ -77,9 +79,9 @@ int main(int argc, char **argv)
 	uint8_t *code = ecalloc(code_size, sizeof(*code));
 	compile(&decl->data.proc, code);
 
-	// free the AST and parser, since we no longer need it.
+	// free the AST and dict, since we no longer need it.
 	free_decl(decl);
-	clear_parser(&parser);
+	clear_dict(&dict);
 
 	if (errors > 0) {
 		return 1;

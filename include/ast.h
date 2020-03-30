@@ -3,7 +3,7 @@
 
 #include "noded.h" // struct position, enum token
 #include <stddef.h> // size_t
-#include <stdint.h> // uint8_t, UINT8_MAX
+#include <stdint.h> // uint8_t, UINT8_MAX, uint16_t
 
 struct expr {
 	enum expr_type {
@@ -204,6 +204,20 @@ struct decl {
 	} data;
 };
 
+struct symdict {
+	char **syms;
+	size_t len;
+	size_t cap;
+};
+
+struct parser {
+	struct scanner scanner;
+	struct symdict *dict; // Not owned by the struct
+
+	// Look one token ahead
+	struct fulltoken current;
+};
+
 
 // ast.c
 
@@ -224,6 +238,9 @@ enum call_order {
 	CHILD_FIRST   // Vice versa
 };
 
+
+// ast.c
+
 void walk_expr(expr_func func, struct expr *e, void *dat,
 	enum call_order order);
 void walk_stmt(stmt_func sfunc, expr_func efunc,
@@ -237,12 +254,19 @@ void free_stmt(struct stmt *s);
 void free_decl(struct decl *d);
 
 
+// dict.c
+
+size_t sym_id(struct symdict *dict, const char *sym);
+const char *id_sym(const struct symdict *dict, size_t id);
+size_t dict_size(const struct symdict *dict);
+void clear_dict(struct symdict *dict);
+
+
 // parser.c
 
-void init_parser(struct parser *parser, FILE *f);
+void init_parser(struct parser *parser, FILE *f, struct symdict *dict);
 bool parser_eof(const struct parser *parser);
 struct decl *parse_decl(struct parser *parser);
-void clear_parser(struct parser *parser);
 
 
 // compiler.c

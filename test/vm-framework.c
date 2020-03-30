@@ -40,9 +40,9 @@ static uint8_t recv(int porti, void *dat)
 
 void test_code(struct vm_test *test)
 {
-	struct proc_node *node =
-		new_proc_node(test->code, test->code_size, &send, &recv);
-	run(node, test);
+	struct proc_node node;
+	init_proc_node(&node, test->code, test->code_size, &send, &recv);
+	run(&node, test);
 
 	// Make sure *all* messages were sent and received
 	for (size_t i = 0; i < PROC_PORTS; i++) {
@@ -60,5 +60,5 @@ void test_code(struct vm_test *test)
 		}
 	}
 
-	free_proc_node(node);
+	clear_proc_node(&node);
 }

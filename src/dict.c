@@ -11,18 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "noded.h"
+#include "ast.h"
 
 static void init(struct symdict *dict)
 {
 	dict->cap = 8;
 	dict->syms = ecalloc(dict->cap, sizeof(*dict->syms));
-}
-
-static void expand(struct symdict *dict)
-{
-	dict->cap *= 2;
-	dict->syms = erealloc(dict->syms, dict->cap * sizeof(*dict->syms));
 }
 
 size_t sym_id(struct symdict *dict, const char *sym)
@@ -38,8 +32,11 @@ size_t sym_id(struct symdict *dict, const char *sym)
 	}
 
 	// No strings matched; add a new one to the array.
-	if (dict->len == dict->cap)
-		expand(dict);
+	if (dict->len == dict->cap) {
+		dict->cap *= 2;
+		dict->syms = erealloc(dict->syms,
+			dict->cap * sizeof(*dict->syms));
+	}
 
 	size_t result = dict->len++;
 	dict->syms[result] = strdup(sym);

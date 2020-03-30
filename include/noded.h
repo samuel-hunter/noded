@@ -1,11 +1,11 @@
 #ifndef NODED_H
 #define NODED_H
 
-#include <stdarg.h>
+#include <stdarg.h>  // va_*
 #include <stdbool.h> // bool
-#include <stddef.h> // size_t
-#include <stdint.h> // uint8_t, UINT8_MAX
-#include <stdio.h>
+#include <stddef.h>  // size_t
+#include <stdint.h>  // uint8_t, UINT8_MAX
+#include <stdio.h>   // FILE
 
 // Precedence-based binary operator scanning.
 #define NON_OPERATOR   -1
@@ -146,31 +146,12 @@ struct scanner {
 	struct position pos;
 };
 
-struct symdict {
-	char **syms;
-	size_t len;
-	size_t cap;
-};
-
-struct parser {
-	struct scanner scanner;
-	struct symdict dict;
-
-	// Look one token ahead
-	struct fulltoken current;
-};
-
-
-// noded.c (or friends)
-
-void send_error(const struct position *pos, enum error_type type,
-	const char *fmt, ...);
-
-
 // err.c
 
 void vprint_error(const char *srcname, FILE *f, const struct position *pos,
 	enum error_type type, const char *fmt, va_list ap);
+void send_error(const struct position *pos, enum error_type type,
+	const char *fmt, ...);
 
 
 // alloc.c
@@ -197,13 +178,5 @@ const char *strtoken(enum token tok);
 
 void init_scanner(struct scanner *scanner, FILE *f);
 void scan(struct scanner *scanner, struct fulltoken *dest);
-
-
-// dict.c
-
-size_t sym_id(struct symdict *dict, const char *sym);
-const char *id_sym(const struct symdict *dict, size_t id);
-size_t dict_size(const struct symdict *dict);
-void clear_dict(struct symdict *dict);
 
 #endif /* NODED_H */

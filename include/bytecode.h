@@ -3,7 +3,7 @@
 
 #include <stdbool.h> // bool
 #include <stddef.h>  // size_t
-#include <stdint.h>  // uint8_t, UINT8_MAX
+#include <stdint.h>  // uint8_t, UINT8_MAX, uint16_t
 
 enum {
 	RECV_STORE_MASK = 0x03,
@@ -106,6 +106,8 @@ struct proc_node {
 	send_handler send;
 	recv_handler recv;
 
+	bool halted;
+
 	uint8_t mem[PROC_VARS];
 };
 
@@ -118,9 +120,9 @@ uint8_t recv_dest(const uint8_t *src, bool *is_store);
 
 // vm.c
 
-struct proc_node *new_proc_node(const uint8_t code[], size_t code_size,
-	send_handler send, recv_handler recv);
-void free_proc_node(struct proc_node *node);
+void init_proc_node(struct proc_node *node, const uint8_t code[],
+	size_t code_size, send_handler send, recv_handler recv);
+void clear_proc_node(struct proc_node *node);
 void run(struct proc_node *node, void *handler_dat);
 
 #endif // BYTECODE_H
