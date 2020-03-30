@@ -58,11 +58,6 @@ static bool has_errors(void)
 	return Globals.errors > 0;
 }
 
-static void print_usage(const char *prog_name)
-{
-	fprintf(stderr, "Usage: %s FILE\n", prog_name);
-}
-
 static void handle_send(uint8_t val, int port, void *dat)
 {
 	// Route all SEND operations to stdout
@@ -90,20 +85,16 @@ static uint8_t handle_recv(int port, void *dat)
 
 int main(int argc, char **argv)
 {
-	struct symdict dict;
+	struct symdict dict = {0}; // a zero-value dict is freshly initialized.
 	struct parser parser;
 	struct decl *decl;
 	struct proc_node node;
 	size_t code_size;
 	uint8_t *code;
 
-	// A dict can be freshly initialized by setting it to its zero
-	// value.
-	memset(&dict, 0, sizeof(dict));
-
-	// Noded requires a file, it shouldn't just be stdin.
 	if (argc != 2) {
-		print_usage(argv[0]);
+		// Noded requires a file argument
+		fprintf(stderr, "Usage: %s FILE\n", argv[0]);
 		return 1;
 	}
 
@@ -112,10 +103,9 @@ int main(int argc, char **argv)
 	if (Globals.f == NULL)
 		err(1, "Cannot open %s", Globals.filename);
 
-	// Scan the file token-by-token
+	// Grab a declaration (hopefully a processor decl)
 	init_parser(&parser, Globals.f, &dict);
 	decl = parse_decl(&parser);
-
 	if (has_errors())
 		return 1;
 
@@ -124,14 +114,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	// Compile the processor from its declaration
 	code_size = bytecode_size(&decl->data.proc);
-
 	if (has_errors())
 		return 1;
 
 	code = ecalloc(code_size, sizeof(*code));
 	compile(&decl->data.proc, code);
-
 	if (has_errors())
 		return 1;
 

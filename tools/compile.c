@@ -18,9 +18,12 @@
 #include "ast.h"
 #include "bytecode.h"
 
-static size_t errors;
-// Number of errors before the parser panics.
+// Number of errors before the tool dies.
 static const size_t max_errors = 10;
+
+static struct {
+	size_t errors;
+} Globals = {0};
 
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...)
@@ -38,7 +41,7 @@ void send_error(const struct position *pos, enum error_type type,
 	case WARN:
 		break;
 	case ERR:
-		if (++errors > max_errors)
+		if (++Globals.errors > max_errors)
 			errx(1, "Too many errors.");
 		break;
 	case FATAL:
@@ -49,7 +52,7 @@ void send_error(const struct position *pos, enum error_type type,
 
 int main(int argc, char **argv)
 {
-	struct symdict dict;
+	struct symdict dict = {0}; // A zero-valued symdict is an initialized symdict
 	struct parser parser;
 
 	// This program doesn't accept any arguments.
@@ -58,37 +61,36 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	// Scan the file token-by-token
-	memset(&dict, 0, sizeof(dict));
+	// Parse a declaration
 	init_parser(&parser, stdin, &dict);
-
 	struct decl *decl = parse_decl(&parser);
-	if (errors > 0) {
+	if (Globals.errors > 0)
 		return 1;
-	}
 
+	// Make sure it's a processor declaration
 	if (decl->type != PROC_DECL) {
-		fprintf(stderr, "Expected proc decl\n");
+		fprintf(stderr, "Expected a processor\n");
 		return 1;
 	}
 
-	errno = 0; // Reset errno
+	// Check size required and compile.
 	size_t code_size = bytecode_size(&decl->data.proc);
-	if (errno == ERANGE)
-		errx(1, "Node too complex");
+	if (Globals.errors > 0)
+		return 1;
+
 	uint8_t *code = ecalloc(code_size, sizeof(*code));
 	compile(&decl->data.proc, code);
+	if (Globals.errors > 0)
+		return 1;
 
-	// free the AST and dict, since we no longer need it.
+	// Write the compiled code to stdout
+	fwrite(code, sizeof(*code), code_size, stdout);
+
+	// Free our data structures
+	free(code);
 	free_decl(decl);
 	clear_dict(&dict);
 
-	if (errors > 0) {
-		return 1;
-	} else {
-		fwrite(code, sizeof(*code), code_size, stdout);
-		free(code);
-	}
-
+	// :)
 	return 0;
 }

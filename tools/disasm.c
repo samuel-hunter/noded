@@ -92,25 +92,23 @@ static const char *code_str(uint8_t code)
 
 int main(int argc, char **argv)
 {
-	// this program doesn't need any arguments.
+#define BUF_SIZE 4096
+	// this program doesn't use any arguments.
 	if (argc != 1) {
 		fprintf(stderr, "Usage: %s < INPUT\n", argv[0]);
 		return 1;
 	}
 
 	// TODO have the program accept bytecode of any size up to UINT16_MAX.
-#define BUF_SIZE 4096
 	uint8_t code[BUF_SIZE];
 	uint16_t codesize = fread(code, sizeof(*code), BUF_SIZE, stdin);
 	if (!feof(stdin)) {
 		errx(1, "Input too large.");
 	}
-#undef BUF_SIZE
 
         // Disassemble bytecode
 	uint16_t isp = 0;
 	while (isp < codesize) {
-
 		size_t advance = 1;
 		uint8_t instr = code[isp];
 		uint8_t tmp;
@@ -147,4 +145,5 @@ int main(int argc, char **argv)
 	printf("%04x\tend\n", isp);
 
 	return 0;
+#undef BUF_SIZE
 }
