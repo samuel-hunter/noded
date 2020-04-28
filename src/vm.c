@@ -68,7 +68,6 @@ static void tick(struct proc_node *node, void *handler_dat)
 	uint16_t advance = 1;
 	uint8_t instr = node->code[node->isp];
 	uint8_t val1, val2, dest, src;
-	bool is_store;
 
 	switch (instr) {
 	case OP_PUSH:
@@ -212,19 +211,8 @@ static void tick(struct proc_node *node, void *handler_dat)
 	case OP_RECV1:
 	case OP_RECV2:
 	case OP_RECV3:
-		advance = 2;
 		src = instr - OP_RECV0;
-		dest = recv_dest(&node->code[node->isp], &is_store);
-		if (is_store) {
-			// %port <- %port
-			node->send(node->recv(src, handler_dat),
-					dest, handler_dat);
-			} else {
-			// $var <- %port
-			node->mem[dest] =
-				node->recv(src, handler_dat);
-		}
-
+		push(node, node->recv(src, handler_dat));
 		break;
 	case OP_HALT:
 		node->halted = true;

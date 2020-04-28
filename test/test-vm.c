@@ -171,17 +171,21 @@ int main(void)
 	test_vm(&test_manyports);
 
 	uint8_t test_recv_c[] = {
-		OP_RECV0, 0x05, // %1 <- %0
+		OP_RECV0,
+		OP_SEND1, // %1 <- %0
 
-		OP_RECV2, 0x07, // %3 <- %2
+		OP_RECV2,
+		OP_SEND3, // %3 <- %2
 
-		OP_RECV0, 0x01, // $1 <- %0
+		OP_RECV0,
+		OP_SAVE1, // $1 <- %0
 		OP_LOAD1,
-		OP_SEND1,       // %1 <- $1
+		OP_SEND1, // %1 <- $1
 
-		OP_RECV2, 0x03, // $3 <- %2
+		OP_RECV2,
+		OP_SAVE3, // $3 <- %2
 		OP_LOAD3,
-		OP_SEND3,       // %3 <- $3
+		OP_SEND3, // %3 <- $3
 
 		OP_HALT
 	};

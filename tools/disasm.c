@@ -111,8 +111,6 @@ int main(int argc, char **argv)
 	while (isp < codesize) {
 		size_t advance = 1;
 		uint8_t instr = code[isp];
-		uint8_t tmp;
-		bool is_store;
 
 		printf("%04x\t%s ", isp, code_str(instr));
 		switch (instr) {
@@ -126,14 +124,6 @@ int main(int argc, char **argv)
 			advance = 3;
 			printf("0x%04x\n", addr_value(&code[isp]));
 			break;
-		case OP_RECV0:
-		case OP_RECV1:
-		case OP_RECV2:
-		case OP_RECV3:
-			advance = 2;
-			// tmp = store index
-			tmp = recv_dest(&code[isp], &is_store);
-			printf("%c%d\n", is_store ? '%' : '$', tmp);
 			break;
 		default:
 			printf("\n");

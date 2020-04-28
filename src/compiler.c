@@ -16,7 +16,6 @@ enum {
 	ASM_PUSH = ASM_OP + 1,       // OP_PUSH <lit>
 	ASM_ADDR = 2,                // <addr lit>
 	ASM_JMP = ASM_OP + ASM_ADDR, // OP_*JMP <addr_lit>
-	ASM_RECV = ASM_OP + 1        // OP_RECV# <data>
 };
 
 struct context {
@@ -117,20 +116,6 @@ static uint8_t *asm_jump2(enum opcode code, uint8_t **addr, uint8_t *buf)
 	// Add in a nice value of 0xFFFF that can be very easily
 	// spot-checked to be an skipped address.
 	buf = asm_addr(UINT16_MAX, buf);
-	return buf;
-}
-
-// Assemble a receive statement.
-static uint8_t *asm_recv(uint8_t dest_store, uint8_t src_store,
-	bool is_port, uint8_t *buf)
-{
-	*buf++ = OP_RECV0 + src_store;
-
-	*buf = 0;
-	*buf |= dest_store & RECV_STORE_MASK;
-	*buf |= is_port ? RECV_PORT_FLAG : 0;
-	buf++;
-
 	return buf;
 }
 
@@ -884,7 +869,7 @@ static size_t send_stmt_size(const struct stmt *stmt)
 
 	if (src->type == STORE_EXPR && src->data.store.kind == PORT) {
 		// %port|$var <- %port
-		return ASM_RECV;
+		return ASM_OP + ASM_OP;
 	} else if (dest->kind == PORT) {
 		// %port <- expr
 		return expr_size(src) +
@@ -905,9 +890,15 @@ static uint8_t *compile_send_stmt(const struct stmt *stmt,
 
 	if (src->type == STORE_EXPR && src->data.store.kind == PORT) {
 		// %port|$var <- %port
-		bool is_port = dest->kind == PORT;
-		buf = asm_recv(store(ctx, dest),
-			store(ctx, &src->data.store), is_port, buf);
+		buf = asm_op(OP_RECV0 + store(ctx, &src->data.store), buf);
+
+		if (dest->kind == PORT) {
+			// %port <- $port
+			buf = asm_op(OP_SEND0 + store(ctx, dest), buf);
+		} else {
+			// $var <- %port
+			buf = asm_op(OP_SAVE0 + store(ctx, dest), buf);
+		}
 	} else {
 		// %port <- expr
 		buf = compile_expr(src, ctx, buf);
