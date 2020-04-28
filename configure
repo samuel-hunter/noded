@@ -30,7 +30,7 @@ bins () {
 }
 
 for i in "$@"; do
-    case $1 in
+    case $i in
         CC=*)
             CC="${i#*=}"
             ;;
