@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 set -u
 
 target=noded
-includes="include/noded.h include/ast.h include/bytecode.h test/vm-framework.h"
+includes="include/noded.h include/ast.h include/dict.h include/vm.h test/vm-framework.h"
 
 debug_flags=false
 
@@ -19,7 +19,7 @@ bins () {
     # Anatomy: mkbin TYPE NAME OBJECTS...
     mkbin target "$target" src/alloc src/ast src/bytecode src/compiler src/dict \
              src/err src/noded src/parser src/scanner src/token src/vm
-    mkbin tool disasm src/bytecode tools/disasm
+    mkbin tool disasm src/alloc src/bytecode tools/disasm
     mkbin tool compile src/alloc src/ast src/compiler src/dict src/err \
            src/parser src/scanner src/token tools/compile
     mkbin test test-vm src/alloc src/bytecode src/vm \

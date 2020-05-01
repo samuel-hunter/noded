@@ -1,9 +1,11 @@
 #ifndef AST_H
 #define AST_H
 
-#include "noded.h" // struct position, enum token
 #include <stddef.h> // size_t
 #include <stdint.h> // uint8_t, UINT8_MAX, uint16_t
+
+#include "noded.h" // struct position, enum token
+#include "dict.h"  // symdict
 
 struct expr {
 	enum expr_type {
@@ -204,12 +206,6 @@ struct decl {
 	} data;
 };
 
-struct symdict {
-	char **syms;
-	size_t len;
-	size_t cap;
-};
-
 struct parser {
 	struct scanner scanner;
 	struct symdict *dict; // Not owned by the struct
@@ -254,14 +250,6 @@ void free_stmt(struct stmt *s);
 void free_decl(struct decl *d);
 
 
-// dict.c
-
-size_t sym_id(struct symdict *dict, const char *sym);
-const char *id_sym(const struct symdict *dict, size_t id);
-size_t dict_size(const struct symdict *dict);
-void clear_dict(struct symdict *dict);
-
-
 // parser.c
 
 void init_parser(struct parser *parser, FILE *f, struct symdict *dict);
@@ -271,6 +259,7 @@ struct decl *parse_decl(struct parser *parser);
 
 // compiler.c
 uint16_t bytecode_size(const struct proc_decl *d);
-uint8_t *compile(const struct proc_decl *d, uint8_t *n);
+uint8_t *compile(const struct proc_decl *d, uint8_t *n,
+	size_t *port_ids, int *nports);
 
 #endif // AST_H

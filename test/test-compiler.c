@@ -18,6 +18,8 @@
 #include "ast.h"
 #include "vm-framework.h"
 
+#define LEN(X) (sizeof(X)/sizeof(*(X)))
+
 struct compiler_test {
 	const char *name;
 	const char *src;
@@ -84,7 +86,7 @@ static void test_compiler(struct compiler_test *test)
 		exit(1);
 
 	vmtest.code = ecalloc(vmtest.code_size, sizeof(*vmtest.code));
-	uint8_t *end = compile(&decl->data.proc, vmtest.code);
+	uint8_t *end = compile(&decl->data.proc, vmtest.code, NULL, NULL);
 	if (Globals.has_error)
 		exit(1);
 
@@ -131,24 +133,24 @@ int main(void)
 		.src = test_send_src,
 		.ports = {
 			{
-				.send = test_send_1s,
-				.send_len = sizeof(test_send_1s)/
-				            sizeof(*test_send_1s)
+				.type = SEND_PORT,
+				.buf = test_send_1s,
+				.buf_len = LEN(test_send_1s)
 			},
 			{
-				.send = test_send_2s,
-				.send_len = sizeof(test_send_2s)/
-				            sizeof(*test_send_2s)
+				.type = SEND_PORT,
+				.buf = test_send_2s,
+				.buf_len = LEN(test_send_2s)
 			},
 			{
-				.send = test_send_3s,
-				.send_len = sizeof(test_send_3s)/
-				            sizeof(*test_send_3s)
+				.type = SEND_PORT,
+				.buf = test_send_3s,
+				.buf_len = LEN(test_send_3s)
 			},
 			{
-				.send = test_send_4s,
-				.send_len = sizeof(test_send_4s)/
-				            sizeof(*test_send_4s)
+				.type = SEND_PORT,
+				.buf = test_send_4s,
+				.buf_len = LEN(test_send_4s)
 			},
 		}
 	};
@@ -167,9 +169,9 @@ int main(void)
 		.src = test_vars_src,
 		.ports = {
 			{
-				.send = test_vars_1s,
-				.send_len = sizeof(test_vars_1s)/
-				            sizeof(*test_vars_1s)
+				.type = SEND_PORT,
+				.buf = test_vars_1s,
+				.buf_len = LEN(test_vars_1s)
 			}
 		}
 	};
@@ -192,24 +194,24 @@ int main(void)
 		.src = test_recv_src,
 		.ports = {
 			{
-				.recv = test_recv_1r,
-				.recv_len = sizeof(test_recv_1r)/
-				            sizeof(*test_recv_1r)
+				.type = RECV_PORT,
+				.buf = test_recv_1r,
+				.buf_len = LEN(test_recv_1r)
 			},
 			{
-				.send = test_recv_2s,
-				.send_len = sizeof(test_recv_2s)/
-				            sizeof(*test_recv_2s)
+				.type = SEND_PORT,
+				.buf = test_recv_2s,
+				.buf_len = LEN(test_recv_2s)
 			},
 			{
-				.recv = test_recv_3r,
-				.recv_len = sizeof(test_recv_3r)/
-				            sizeof(*test_recv_3r)
+				.type = RECV_PORT,
+				.buf = test_recv_3r,
+				.buf_len = LEN(test_recv_3r)
 			},
 			{
-				.send = test_recv_4s,
-				.send_len = sizeof(test_recv_4s)/
-				            sizeof(*test_recv_4s)
+				.type = SEND_PORT,
+				.buf = test_recv_4s,
+				.buf_len = LEN(test_recv_4s)
 			}
 		}
 	};
@@ -239,9 +241,9 @@ int main(void)
 		.src = test_unary_src,
 		.ports = {
 			{
-				.send = test_unary_1s,
-				.send_len = sizeof(test_unary_1s)/
-				            sizeof(*test_unary_1s)
+				.type = SEND_PORT,
+				.buf = test_unary_1s,
+				.buf_len = LEN(test_unary_1s)
 			}
 		}
 	};
@@ -261,9 +263,9 @@ int main(void)
 		.src = test_binary_src,
 		.ports = {
 			{
-				.send = test_binary_1s,
-				.send_len = sizeof(test_binary_1s)/
-				            sizeof(*test_binary_1s)
+				.type = SEND_PORT,
+				.buf = test_binary_1s,
+				.buf_len = LEN(test_binary_1s)
 			}
 		}
 	};
@@ -290,9 +292,9 @@ int main(void)
 		.src = test_labeled_src,
 		.ports = {
 			{
-				.send = test_labeled_1s,
-				.send_len = sizeof(test_labeled_1s)/
-				            sizeof(*test_labeled_1s)
+				.type = SEND_PORT,
+				.buf = test_labeled_1s,
+				.buf_len = LEN(test_labeled_1s)
 			}
 		}
 	};
@@ -311,9 +313,9 @@ int main(void)
 		.src = test_if_src,
 		.ports = {
 			{
-				.send = test_if_1s,
-				.send_len = sizeof(test_if_1s)/
-				            sizeof(*test_if_1s)
+				.type = SEND_PORT,
+				.buf = test_if_1s,
+				.buf_len = LEN(test_if_1s)
 			}
 		}
 	};
@@ -332,14 +334,14 @@ int main(void)
 		.src = test_continuous_src,
 		.ports = {
 			{
-				.recv = test_continuous_1r,
-				.recv_len = sizeof(test_continuous_1r)/
-				            sizeof(*test_continuous_1r)
+				.type = RECV_PORT,
+				.buf = test_continuous_1r,
+				.buf_len = LEN(test_continuous_1r)
 			},
 			{
-				.send = test_continuous_2s,
-				.send_len = sizeof(test_continuous_2s)/
-				            sizeof(*test_continuous_2s)
+				.type = SEND_PORT,
+				.buf = test_continuous_2s,
+				.buf_len = LEN(test_continuous_2s)
 			}
 		}
 	};
@@ -360,9 +362,9 @@ int main(void)
 		.src = test_while_src,
 		.ports = {
 			{
-				.send = test_while_1s,
-				.send_len = sizeof(test_while_1s)/
-				            sizeof(*test_while_1s)
+				.type = SEND_PORT,
+				.buf = test_while_1s,
+				.buf_len = LEN(test_while_1s)
 			}
 		}
 	};
@@ -389,9 +391,9 @@ int main(void)
 		.src = test_do_while_src,
 		.ports = {
 			{
-				.send = test_do_while_1s,
-				.send_len = sizeof(test_do_while_1s)/
-				            sizeof(*test_do_while_1s)
+				.type = SEND_PORT,
+				.buf = test_do_while_1s,
+				.buf_len = LEN(test_do_while_1s)
 			}
 		}
 	};
@@ -410,9 +412,9 @@ int main(void)
 		.src = test_for_src,
 		.ports = {
 			{
-				.send = test_for_1s,
-				.send_len = sizeof(test_for_1s)/
-				            sizeof(*test_for_1s)
+				.type = SEND_PORT,
+				.buf = test_for_1s,
+				.buf_len = LEN(test_for_1s)
 			}
 		}
 	};
@@ -441,14 +443,14 @@ int main(void)
 		.src = test_break_src,
 		.ports = {
 			{
-				.send = test_break_1s,
-				.send_len = sizeof(test_break_1s)/
-				            sizeof(*test_break_1s)
+				.type = SEND_PORT,
+				.buf = test_break_1s,
+				.buf_len = LEN(test_break_1s)
 			},
 			{
-				.send = test_break_2s,
-				.send_len = sizeof(test_break_2s)/
-				            sizeof(*test_break_2s)
+				.type = SEND_PORT,
+				.buf = test_break_2s,
+				.buf_len = LEN(test_break_2s)
 			}
 		}
 	};
@@ -468,9 +470,9 @@ int main(void)
 		.src = test_continue_src,
 		.ports = {
 			{
-				.send = test_continue_1s,
-				.send_len = sizeof(test_continue_1s)/
-				            sizeof(*test_continue_1s)
+				.type = SEND_PORT,
+				.buf = test_continue_1s,
+				.buf_len = LEN(test_continue_1s)
 			}
 		}
 	};
@@ -500,9 +502,9 @@ int main(void)
 		.src = test_switch1_src,
 		.ports = {
 			{
-				.send = test_switch1_1s,
-				.send_len = sizeof(test_switch1_1s)/
-				            sizeof(*test_switch1_1s)
+				.type = SEND_PORT,
+				.buf = test_switch1_1s,
+				.buf_len = LEN(test_switch1_1s)
 			}
 		}
 	};
@@ -534,9 +536,9 @@ int main(void)
 		.src = test_switch2_src,
 		.ports = {
 			{
-				.send = test_switch2_1s,
-				.send_len = sizeof(test_switch2_1s)/
-				            sizeof(*test_switch2_1s)
+				.type = SEND_PORT,
+				.buf = test_switch2_1s,
+				.buf_len = LEN(test_switch2_1s)
 			}
 		}
 	};

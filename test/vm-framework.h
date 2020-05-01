@@ -2,7 +2,9 @@
 #define VM_FRAMEWORK_H
 
 #include "noded.h"
-#include "bytecode.h"
+#include "vm.h"
+
+enum port_type { NONE, SEND_PORT, RECV_PORT };
 
 struct vm_test {
 	const char *name;
@@ -10,16 +12,12 @@ struct vm_test {
 	uint16_t code_size;
 
 	struct test_port {
-		const uint8_t *send;
-		size_t send_len;
-		size_t send_idx;
-
-		const uint8_t *recv;
-		size_t recv_len;
-		size_t recv_idx;
+		enum port_type type;
+		const uint8_t *buf;
+		size_t buf_len;
 	} ports[PROC_PORTS];
 };
 
-void test_code(struct vm_test *test);
+void test_code(struct vm_test *vm_test);
 
 #endif /* VM_FRAMEWORK_H */

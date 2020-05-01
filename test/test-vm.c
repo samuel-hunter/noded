@@ -11,6 +11,8 @@
 #include "noded.h"
 #include "vm-framework.h"
 
+#define LEN(X) (sizeof(X)/sizeof(*(X)))
+
 static void test_vm(struct vm_test *test)
 {
 	printf("Running %s...\n", test->name);
@@ -41,12 +43,12 @@ int main(void)
 	struct vm_test test_basics = {
 		.name = "Basics Test",
 		.code = test_basics_c,
-		.code_size = sizeof(test_basics_c)/sizeof(*test_basics_c),
+		.code_size = LEN(test_basics_c),
 		.ports = {
 			{
-				.send = test_basics_1s,
-				.send_len = sizeof(test_basics_1s)/
-				            sizeof(*test_basics_1s)
+				.type = SEND_PORT,
+				.buf = test_basics_1s,
+				.buf_len = LEN(test_basics_1s)
 			}
 		}
 	};
@@ -102,12 +104,12 @@ int main(void)
 	struct vm_test test_variables = {
 		.name = "Variable Test",
 		.code = test_variables_c,
-		.code_size = sizeof(test_variables_c)/sizeof(*test_variables_c),
+		.code_size = LEN(test_variables_c),
 		.ports = {
 			{
-				.send = test_variables_1s,
-				.send_len = sizeof(test_variables_1s)/
-				            sizeof(*test_variables_1s)
+				.type = SEND_PORT,
+				.buf = test_variables_1s,
+				.buf_len = LEN(test_variables_1s)
 			}
 		}
 	};
@@ -144,27 +146,27 @@ int main(void)
 	struct vm_test test_manyports = {
 		.name = "Many Ports Test",
 		.code = test_manyports_c,
-		.code_size = sizeof(test_manyports_c)/sizeof(*test_manyports_c),
+		.code_size = LEN(test_manyports_c),
 		.ports = {
 			{
-				.send = test_manyports_1s,
-				.send_len = sizeof(test_manyports_1s)/
-				            sizeof(*test_manyports_1s)
+				.type = SEND_PORT,
+				.buf = test_manyports_1s,
+				.buf_len = LEN(test_manyports_1s)
 			},
 			{
-				.send = test_manyports_2s,
-				.send_len = sizeof(test_manyports_2s)/
-				            sizeof(*test_manyports_2s)
+				.type = SEND_PORT,
+				.buf = test_manyports_2s,
+				.buf_len = LEN(test_manyports_2s)
 			},
 			{
-				.send = test_manyports_3s,
-				.send_len = sizeof(test_manyports_3s)/
-				            sizeof(*test_manyports_3s)
+				.type = SEND_PORT,
+				.buf = test_manyports_3s,
+				.buf_len = LEN(test_manyports_3s)
 			},
 			{
-				.send = test_manyports_4s,
-				.send_len = sizeof(test_manyports_4s)/
-				            sizeof(*test_manyports_4s)
+				.type = SEND_PORT,
+				.buf = test_manyports_4s,
+				.buf_len = LEN(test_manyports_4s)
 			}
 		}
 	};
@@ -196,27 +198,27 @@ int main(void)
 	struct vm_test test_recv = {
 		.name = "Recv Test",
 		.code = test_recv_c,
-		.code_size = sizeof(test_recv_c)/sizeof(*test_recv_c),
+		.code_size = LEN(test_recv_c),
 		.ports = {
 			{
-				.recv = test_recv_1r,
-				.recv_len = sizeof(test_recv_1r)/
-				            sizeof(*test_recv_1r)
+				.type = RECV_PORT,
+				.buf = test_recv_1r,
+				.buf_len = LEN(test_recv_1r)
 			},
 			{
-				.send = test_recv_2s,
-				.send_len = sizeof(test_recv_2s)/
-				            sizeof(*test_recv_2s)
+				.type = SEND_PORT,
+				.buf = test_recv_2s,
+				.buf_len = LEN(test_recv_2s)
 			},
 			{
-				.recv = test_recv_3r,
-				.recv_len = sizeof(test_recv_3r)/
-				            sizeof(*test_recv_3r)
+				.type = RECV_PORT,
+				.buf = test_recv_3r,
+				.buf_len = LEN(test_recv_3r)
 			},
 			{
-				.send = test_recv_4s,
-				.send_len = sizeof(test_recv_4s)/
-				            sizeof(*test_recv_4s)
+				.type = SEND_PORT,
+				.buf = test_recv_4s,
+				.buf_len = LEN(test_recv_4s)
 			}
 		}
 	};
@@ -285,12 +287,12 @@ int main(void)
 	struct vm_test test_math = {
 		.name = "Math Test",
 		.code = test_math_c,
-		.code_size = sizeof(test_math_c)/sizeof(*test_math_c),
+		.code_size = LEN(test_math_c),
 		.ports = {
 			{
-				.send = test_math_1s,
-				.send_len = sizeof(test_math_1s)/
-				            sizeof(*test_math_1s)
+				.type = SEND_PORT,
+				.buf = test_math_1s,
+				.buf_len = LEN(test_math_1s)
 			}
 		}
 	};
@@ -339,12 +341,12 @@ int main(void)
 	struct vm_test test_comparison = {
 		.name = "Comparison Test",
 		.code = test_comparison_c,
-		.code_size = sizeof(test_comparison_c)/sizeof(*test_comparison_c),
+		.code_size = LEN(test_comparison_c),
 		.ports = {
 			{
-				.send = test_comparison_1s,
-				.send_len = sizeof(test_comparison_1s)/
-				            sizeof(*test_comparison_1s)
+				.type = SEND_PORT,
+				.buf = test_comparison_1s,
+				.buf_len = LEN(test_comparison_1s)
 			}
 		}
 	};
@@ -372,12 +374,12 @@ int main(void)
 	struct vm_test test_bitwise = {
 		.name = "Bitwise Test",
 		.code = test_bitwise_c,
-		.code_size = sizeof(test_bitwise_c)/sizeof(*test_bitwise_c),
+		.code_size = LEN(test_bitwise_c),
 		.ports = {
 			{
-				.send = test_bitwise_1s,
-				.send_len = sizeof(test_bitwise_1s)/
-				            sizeof(*test_bitwise_1s)
+				.type = SEND_PORT,
+				.buf = test_bitwise_1s,
+				.buf_len = LEN(test_bitwise_1s)
 			}
 		}
 	};
@@ -418,12 +420,12 @@ int main(void)
 	struct vm_test test_logical = {
 		.name = "Logical Test",
 		.code = test_logical_c,
-		.code_size = sizeof(test_logical_c)/sizeof(*test_logical_c),
+		.code_size = LEN(test_logical_c),
 		.ports = {
 			{
-				.send = test_logical_1s,
-				.send_len = sizeof(test_logical_1s)/
-				            sizeof(*test_logical_1s)
+				.type = SEND_PORT,
+				.buf = test_logical_1s,
+				.buf_len = LEN(test_logical_1s)
 			}
 		}
 	};
@@ -441,7 +443,7 @@ int main(void)
 	struct vm_test test_jump = {
 		.name = "Unconditional Jump Test",
 		.code = test_jump_c,
-		.code_size = sizeof(test_jump_c)/sizeof(*test_jump_c)
+		.code_size = LEN(test_jump_c),
 	};
 	test_vm(&test_jump);
 
@@ -468,12 +470,12 @@ int main(void)
 	struct vm_test test_tjmp = {
 		.name = "Conditional Jump Test",
 		.code = test_tjmp_c,
-		.code_size = sizeof(test_tjmp_c)/sizeof(*test_tjmp_c),
+		.code_size = LEN(test_tjmp_c),
 		.ports = {
 			{
-				.send = test_tjmp_1s,
-				.send_len = sizeof(test_tjmp_1s)/
-				            sizeof(*test_tjmp_1s)
+				.type = SEND_PORT,
+				.buf = test_tjmp_1s,
+				.buf_len = LEN(test_tjmp_1s)
 			}
 		}
 	};
@@ -501,12 +503,12 @@ int main(void)
 	struct vm_test test_countloop = {
 		.name = "Counting Loop Test",
 		.code = test_countloop_c,
-		.code_size = sizeof(test_countloop_c)/sizeof(*test_countloop_c),
+		.code_size = LEN(test_countloop_c),
 		.ports = {
 			{
-				.send = test_countloop_1s,
-				.send_len = sizeof(test_countloop_1s)/
-				            sizeof(*test_countloop_1s)
+				.type = SEND_PORT,
+				.buf = test_countloop_1s,
+				.buf_len = LEN(test_countloop_1s)
 			}
 		}
 	};

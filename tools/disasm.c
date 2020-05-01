@@ -11,7 +11,7 @@
 #include <err.h>
 
 #include "noded.h"
-#include "bytecode.h"
+#include "vm.h"
 
 const char *code_names[] = {
 	[OP_INVALID] = "INVALID",

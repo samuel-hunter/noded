@@ -1,64 +1,147 @@
 #include <err.h>
 #include <stdio.h>
+#include <stdlib.h> // free
 
 #include "noded.h"
 #include "vm-framework.h"
 
 #define DEBUG stdout
 
-static void send(uint8_t val, int porti, void *dat)
+static bool tick_test_node(void *this);
+static void free_test_node(void *this);
+
+static struct node_class test_node_class = {
+	.tick = &tick_test_node,
+	.free = &free_test_node
+};
+
+struct test_node {
+	const struct vm_test *vm_test;
+
+	struct wire *wires[PROC_PORTS];
+	enum port_type port_types[PROC_PORTS];
+	size_t buf_idx[PROC_PORTS];
+};
+
+static struct node *add_test_node(struct runtime *env, struct vm_test *vm_test)
 {
-	struct vm_test *test = (struct vm_test *)dat;
-	struct test_port *port = &test->ports[porti];
+	struct node *node = add_node(env);
+	struct test_node *test = ecalloc(1, sizeof(*test));
 
-	fprintf(stdout, "%%%d <- %d\n", porti, val);
+	node->class = &test_node_class;
+	node->dat = test;
 
-	if (port->send_idx == port->send_len)
-		errx(1, "Too many messages from port %d "
-		        "(expected only %lu messages)", porti, port->send_len);
+	test->vm_test = vm_test;
 
-	if (port->send[port->send_idx] != val)
-		errx(1, "Expected %d as item #%lu from port %d, but received %d",
-		     port->send[port->send_idx], port->send_idx, porti, val);
-	port->send_idx++;
+	return node;
 }
 
-static uint8_t recv(int porti, void *dat)
+static bool tick_test_node(void *this)
 {
-	struct vm_test *test = (struct vm_test *)dat;
-	struct test_port *port = &test->ports[porti];
+	struct test_node *test = this;
+	bool made_progress = false;
+	uint8_t val;
+	size_t buf_idx;
 
-	if (port->recv_idx == port->recv_len)
-		errx(1, "Too many messages requested from port %d "
-		        "(expected only %lu messages)", porti, port->recv_len);
+	for (int i = 0; i < PROC_PORTS; i++) {
+		const struct test_port *port = &test->vm_test->ports[i];
+		buf_idx = test->buf_idx[i];
 
-	fprintf(DEBUG, "%d <- %%%d\n", port->recv[port->recv_idx], porti);
+		switch (test->port_types[i]) {
+		case SEND_PORT:
+			// proc node sending data to us -- let's receive it and check.
+			switch (recv(test->wires[i], &val)) {
+			case PROCESSED:
+				if (buf_idx == port->buf_len) {
+					errx(1, "Too many messages from port "
+						"%d (expected only %lu messages)",
+						i, port->buf_len);
+				}
 
-	uint8_t result = port->recv[port->recv_idx++];
-	return result;
-}
+				if (port->buf[buf_idx] != val) {
+					errx(1, "Expected %d as item #%lu from "
+						"port %d, but received %d",
+						port->buf[buf_idx], buf_idx,
+						i, val);
+				}
 
-void test_code(struct vm_test *test)
-{
-	struct proc_node node;
-	init_proc_node(&node, test->code, test->code_size, &send, &recv);
-	run(&node, test);
+				test->buf_idx[i]++;
+				made_progress = true;
+				break;
+			default:
+				break;
+			}
+			break;
+		case RECV_PORT:
+			if (buf_idx == port->buf_len) break;
 
-	// Make sure *all* messages were sent and received
-	for (size_t i = 0; i < PROC_PORTS; i++) {
-		struct test_port *port = &test->ports[i];
-		if (port->send_idx != port->send_len) {
-			errx(1, "Expected %lu messages to be sent to port %lu, "
-			     "but found only %lu.", port->send_len, i,
-				port->send_idx);
-		}
-
-		if (port->recv_idx != port->recv_len) {
-			errx(1, "Expected %lu messages to be received to "
-			     "port %lu, but found only %lu.",
-			     port->recv_len, i, port->recv_idx);
+			switch (send(test->wires[i], port->buf[buf_idx])) {
+			case BUFFERED:
+				made_progress = true;
+				break;
+			case BLOCKED:
+				break;
+			case PROCESSED:
+				made_progress = true;
+				test->buf_idx[i]++;
+			}
+			break;
+		default:
+			break;
 		}
 	}
 
-	clear_proc_node(&node);
+	return made_progress;
+}
+
+static void free_test_node(void *this)
+{
+	free(this);
+}
+
+void test_code(struct vm_test *vm_test)
+{
+	struct runtime env = {0};
+	struct node *test_node, *proc_node;
+	struct proc_node *proc;
+	struct test_node *test;
+	struct wire *wire;
+
+	test_node = add_test_node(&env, vm_test);
+	proc_node = add_proc_node(&env, vm_test->code, vm_test->code_size);
+
+	proc = proc_node->dat;
+	test = test_node->dat;
+
+	// Wire up all the nodes.
+	for (size_t i = 0; i < PROC_PORTS; i++) {
+		enum port_type type =
+			test->port_types[i] = vm_test->ports[i].type;
+
+		switch (type) {
+		case SEND_PORT:
+		case RECV_PORT:
+			wire = add_wire(&env);
+			proc->wires[i] = test->wires[i] = wire;
+			break;
+		default:
+			break;
+		}
+	}
+
+	// Run
+	run(&env);
+
+	// Make sure *all* messages were sent and received
+	for (size_t i = 0; i < PROC_PORTS; i++) {
+		const struct test_port *port = &test->vm_test->ports[i];
+		if (test->buf_idx[i] != port->buf_len) {
+			errx(1, "Expected %lu messages to be passed through port %lu, "
+			     "but instead found %lu.", port->buf_len, i,
+				test->buf_idx[i]);
+		}
+	}
+
+	// Clear runtime and go the merry way :)
+	clear_runtime(&env);
 }

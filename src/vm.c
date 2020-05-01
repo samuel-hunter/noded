@@ -10,44 +10,117 @@
 #include <string.h>
 
 #include "noded.h"
-#include "bytecode.h"
+#include "vm.h"
 
-#define INITIAL_STACK_SIZE 8
+static bool tick_proc_node(void *this);
+static void free_proc_node(void *this);
 
-void init_proc_node(struct proc_node *node, const uint8_t code[],
-	size_t code_size, send_handler send, recv_handler recv)
+static const struct node_class proc_node_class = {
+	.tick = &tick_proc_node,
+	.free = &free_proc_node
+};
+
+static bool tick_io_node(void *this);
+static void free_io_node(void *this);
+
+static const struct node_class io_node_class = {
+	.tick = &tick_io_node,
+	.free = &free_io_node
+};
+
+// Send a message through the wire.
+enum wire_status send(struct wire *wire, uint8_t dat)
 {
-	if (code_size > (size_t)UINT16_MAX + 1)
-		errx(1, "Bytecode size too large");
+	if (!wire) return BLOCKED;
 
-	memset(node, 0, sizeof(*node));
-	node->code = code;
-	node->code_size = code_size;
-
-	node->send = send;
-	node->recv = recv;
-
-	// Eagerly create a new stack buffer.
-	node->stack_cap = INITIAL_STACK_SIZE;
-	node->stack = ecalloc(node->stack_cap, sizeof(*node->stack));
-}
-
-void clear_proc_node(struct proc_node *node)
-{
-	free(node->stack);
-	node->stack = NULL;
-}
-
-static void push(struct proc_node *node, uint8_t byte)
-{
-	if (node->stack_top == node->stack_cap) {
-		// Expand the stack when necessary.
-		node->stack_cap *= 2;
-		node->stack = erealloc(node->stack,
-			node->stack_cap * sizeof(*node->stack));
+	switch (wire->status) {
+	case EMPTY:
+		wire->buf = dat;
+		wire->status = FULL;
+		return BUFFERED;
+	case FULL:
+		return BLOCKED;
+	case CONSUMED:
+		wire->status = EMPTY;
+		return PROCESSED;
 	}
 
-	node->stack[node->stack_top++] = byte;
+	// Should never be here unless all hell is loose.
+	assert(false);
+}
+
+// Request a message from the wire.
+enum wire_status recv(struct wire *wire, uint8_t *dest)
+{
+	if (!wire) return BLOCKED;
+
+	if (wire->status == FULL) {
+		*dest = wire->buf;
+		wire->status = CONSUMED;
+		return PROCESSED;
+	} else {
+		return BLOCKED;
+	}
+}
+
+// Reserve a place for for the node and return its pointer.
+struct node *add_node(struct runtime *env)
+{
+	// Create or expand the node vector when necessary.
+	if (env->node_cap == 0) {
+		env->node_cap = 8;
+		env->nodes = ecalloc(env->node_cap, sizeof(*env->nodes));
+	} else if (env->node_cap == env->nnodes) {
+		env->node_cap *= 2;
+		env->nodes = erealloc(env->nodes,
+			env->node_cap * sizeof(*env->nodes));
+	}
+
+	return &env->nodes[env->nnodes++];
+}
+
+struct node *add_proc_node(struct runtime *env,
+	uint8_t code[], size_t code_size)
+{
+	struct node *node = add_node(env);
+	struct proc_node *proc = ecalloc(1, sizeof(*proc));
+
+	node->class = &proc_node_class;
+	node->dat = proc;
+
+	proc->code = code;
+	proc->code_size = code_size;
+
+	// Eagerly create a new stack buffer.
+        // TODO: reckon whether it's possible to analyze the code to
+	// find the maximum stack size ahead of time.
+	proc->stack_cap = 8; // Arbitrary number.
+	proc->stack = ecalloc(proc->stack_cap, sizeof(*proc->stack));
+
+	return node;
+}
+
+struct node *add_io_node(struct runtime *env)
+{
+	struct node *node = add_node(env);
+	struct io_node *io = ecalloc(1, sizeof(*io));
+
+	node->class = &io_node_class;
+	node->dat = io;
+
+	return node;
+}
+
+static void push(struct proc_node *proc, uint8_t byte)
+{
+	if (proc->stack_top == proc->stack_cap) {
+		// Expand the stack when necessary.
+		proc->stack_cap *= 2;
+		proc->stack = erealloc(proc->stack,
+			proc->stack_cap * sizeof(*proc->stack));
+	}
+
+	proc->stack[proc->stack_top++] = byte;
 }
 
 static uint8_t peek(struct proc_node *node)
@@ -56,119 +129,122 @@ static uint8_t peek(struct proc_node *node)
 	return node->stack[node->stack_top-1];
 }
 
-static uint8_t pop(struct proc_node *node)
+static uint8_t pop(struct proc_node *proc)
 {
-	assert(node->stack_top > 0); // Stack mustn't be empty.
-	return node->stack[--node->stack_top];
+	assert(proc->stack_top > 0); // Stack mustn't be empty.
+	return proc->stack[--proc->stack_top];
 }
 
-static void tick(struct proc_node *node, void *handler_dat)
+static bool tick_proc_node(void *this)
 {
+	struct proc_node *proc = this;
+
 	// The length of the instruction, or how many bytes to advance by.
 	uint16_t advance = 1;
-	uint8_t instr = node->code[node->isp];
-	uint8_t val1, val2, dest, src;
+	uint8_t instr = proc->code[proc->isp];
+	uint8_t val1, val2, var;
+	struct wire *wire;
 
 	switch (instr) {
 	case OP_PUSH:
 		advance = 2;
-		val1 = node->code[node->isp+1];
-		push(node, val1);
+		val1 = proc->code[proc->isp+1];
+		push(proc, val1);
 		break;
 	case OP_POP:
-		pop(node);
+		pop(proc);
 		break;
 	case OP_DUP:
-		push(node, peek(node));
+		push(proc, peek(proc));
 		break;
 	case OP_NEGATE:
-		push(node, ~pop(node));
+		push(proc, ~pop(proc));
 		break;
 	case OP_MUL:
-		push(node, pop(node)*pop(node));
+		push(proc, pop(proc)*pop(proc));
 		break;
 	case OP_DIV:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1/val2);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1/val2);
 		break;
 	case OP_MOD:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1%val2);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1%val2);
 		break;
 	case OP_ADD:
-		push(node, pop(node)+pop(node));
+		push(proc, pop(proc)+pop(proc));
 		break;
 	case OP_SUB:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1-val2);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1-val2);
 		break;
 	case OP_SHL:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1<<val2);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1<<val2);
 		break;
 	case OP_SHR:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1>>val2);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1>>val2);
 		break;
 	case OP_AND:
-		push(node, pop(node)&pop(node));
+		push(proc, pop(proc)&pop(proc));
 		break;
 	case OP_XOR:
-		push(node, pop(node)^pop(node));
+		push(proc, pop(proc)^pop(proc));
 		break;
 	case OP_OR:
-		push(node, pop(node)|pop(node));
+		push(proc, pop(proc)|pop(proc));
 		break;
 	case OP_LSS:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1 < val2 ? 1 : 0);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1 < val2 ? 1 : 0);
 		break;
 	case OP_LTE:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1 <= val2 ? 1 : 0);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1 <= val2 ? 1 : 0);
 		break;
 	case OP_GTR:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1 > val2 ? 1 : 0);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1 > val2 ? 1 : 0);
 		break;
 	case OP_GTE:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1 >= val2 ? 1 : 0);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1 >= val2 ? 1 : 0);
 		break;
 	case OP_EQL:
-		push(node, pop(node) == pop(node) ? 1 : 0);
+		push(proc, pop(proc) == pop(proc) ? 1 : 0);
 		break;
 	case OP_NEQ:
-		push(node, pop(node) != pop(node) ? 1 : 0);
+		push(proc, pop(proc) != pop(proc) ? 1 : 0);
 		break;
 	case OP_LAND:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1 ? val2 : 0);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1 ? val2 : 0);
 		break;
 	case OP_LOR:
-		val2 = pop(node); val1 = pop(node);
-		push(node, val1 ? val1 : val2);
+		val2 = pop(proc); val1 = pop(proc);
+		push(proc, val1 ? val1 : val2);
 		break;
 	case OP_LNOT:
-		push(node, !pop(node));
+		push(proc, !pop(proc));
 		break;
 	case OP_JMP:
-		node->isp = addr_value(&node->code[node->isp]);
+		proc->isp = addr_value(&proc->code[proc->isp]);
 		advance = 0;
 		break;
 	case OP_TJMP:
 		advance = 3;
 
-		if (pop(node)) {
-			node->isp = addr_value(&node->code[node->isp]);
+		if (pop(proc)) {
+			proc->isp = addr_value(&proc->code[proc->isp]);
 			advance = 0;
 		}
 		break;
 	case OP_FJMP:
 		advance = 3;
 
-		if (!pop(node)) {
-			node->isp = addr_value(&node->code[node->isp]);
+		if (!pop(proc)) {
+			proc->isp = addr_value(&proc->code[proc->isp]);
 			advance = 0;
 		}
 		break;
@@ -176,63 +252,177 @@ static void tick(struct proc_node *node, void *handler_dat)
 	case OP_SAVE1:
 	case OP_SAVE2:
 	case OP_SAVE3:
-		dest = instr - OP_SAVE0;
-		node->mem[dest] = peek(node);
+		var = instr - OP_SAVE0;
+		proc->mem[var] = peek(proc);
 		break;
 	case OP_LOAD0:
 	case OP_LOAD1:
 	case OP_LOAD2:
 	case OP_LOAD3:
-		src = instr - OP_LOAD0;
-		push(node, node->mem[src]);
+		var = instr - OP_LOAD0;
+		push(proc, proc->mem[var]);
 		break;
 	case OP_INC0:
 	case OP_INC1:
 	case OP_INC2:
 	case OP_INC3:
-		src = instr - OP_INC0;
-		push(node, ++node->mem[src]);
+		var = instr - OP_INC0;
+		push(proc, ++proc->mem[var]);
 		break;
 	case OP_DEC0:
 	case OP_DEC1:
 	case OP_DEC2:
 	case OP_DEC3:
-		src = instr - OP_DEC0;
-		push(node, --node->mem[src]);
+		var = instr - OP_DEC0;
+		push(proc, --proc->mem[var]);
 		break;
 	case OP_SEND0:
 	case OP_SEND1:
 	case OP_SEND2:
 	case OP_SEND3:
-		dest = instr - OP_SEND0;
-		node->send(pop(node), dest, handler_dat);
+		wire = proc->wires[instr - OP_SEND0];
+		val1 = pop(proc);
+		switch (send(wire, val1)) {
+		case BUFFERED:
+			push(proc, val1);
+			return true;
+		case BLOCKED:
+			push(proc, val1);
+			return false;
+		case PROCESSED:
+			break;
+		}
+
 		break;
 	case OP_RECV0:
 	case OP_RECV1:
 	case OP_RECV2:
 	case OP_RECV3:
-		src = instr - OP_RECV0;
-		push(node, node->recv(src, handler_dat));
+		wire = proc->wires[instr - OP_RECV0];
+		if (recv(wire, &val1) == BLOCKED)
+			return false;
+
+		push(proc, val1);
 		break;
 	case OP_HALT:
-		node->halted = true;
-		return;
+		return false;
 	default:
 		errx(1, "Unknown opcode %d.", instr);
 	}
 
-	node->isp += advance;
-	if (node->isp == node->code_size) {
+	proc->isp += advance;
+	if (proc->isp == proc->code_size) {
 		// Loop back around forever.
-		node->isp = 0;
+		proc->isp = 0;
 	}
 
-	assert(node->isp <= node->code_size);
+	assert(proc->isp <= proc->code_size);
+	return true;
 }
 
-void run(struct proc_node *node, void *handler_dat)
+static bool tick_io_node(void *this)
 {
-	while (!node->halted) {
-		tick(node, handler_dat);
+	struct io_node *io = this;
+	bool has_progressed = false;
+	uint8_t val;
+
+	if (io->in_wire && !io->has_buf & !io->eof_reached) {
+		int chr = getchar();
+		if (chr == EOF) {
+			io->eof_reached = true;
+		} else {
+			io->buf = (uint8_t) chr;
+			io->has_buf = true;
+		}
 	}
+
+	if (io->has_buf) {
+		switch (send(io->in_wire, io->buf)) {
+		case BUFFERED:
+			has_progressed = true;
+			break;
+		case BLOCKED:
+			break;
+		case PROCESSED:
+			has_progressed = true;
+			io->has_buf = false;
+			break;
+		}
+	}
+
+	if (recv(io->out_wire, &val) == PROCESSED) {
+		has_progressed = true;
+		putchar(val);
+	}
+
+	return has_progressed;
+}
+
+static bool run_node(struct node *node)
+{
+	bool (*tick)(void *) = node->class->tick;
+	void *dat = node->dat;
+
+	// If the first tick made no progress, report accordingly.
+	if (!tick(dat)) return false;
+
+	// Keep running until the node stops.
+	while (tick(dat));
+	return true;
+}
+
+
+static void free_proc_node(void *this)
+{
+	struct proc_node *proc = this;
+
+	free(proc->stack);
+	free(proc);
+}
+
+static void free_io_node(void *this)
+{
+	struct io_node *io = this;
+
+	free(io);
+}
+
+struct wire *add_wire(struct runtime *env)
+{
+	if (env->nwires == 0) {
+		env->wire_cap = 8;
+		env->wires = ecalloc(env->wire_cap, sizeof(*env->wires));
+	} else if (env->nwires == env->wire_cap) {
+		env->wire_cap *= 2;
+		env->wires = erealloc(env->wires,
+			env->wire_cap * sizeof(*env->wires));
+	}
+
+	return &env->wires[env->nwires++];
+}
+
+void run(struct runtime *env)
+{
+	bool has_progressed; // Whether a single tick made any progression.
+
+	do {
+		has_progressed = false;
+
+		for (size_t i = 0; i < env->nnodes; i++) {
+			struct node *node = &env->nodes[i];
+			has_progressed |= run_node(node);
+		}
+	} while (has_progressed);
+}
+
+void clear_runtime(struct runtime *env)
+{
+	for (size_t i = 0; i < env->nnodes; i++) {
+		struct node *node = &env->nodes[i];
+		node->class->free(node->dat);
+	}
+	free(env->nodes);
+	free(env->wires);
+
+	memset(env, 0, sizeof(*env));
 }

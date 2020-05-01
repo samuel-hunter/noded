@@ -5,6 +5,9 @@
 #include <stddef.h>  // size_t
 #include <stdint.h>  // uint8_t, UINT8_MAX, uint16_t
 
+#include "noded.h" // position
+#include "dict.h"  // symdict
+
 enum {
 	RECV_STORE_MASK = 0x03,
 	RECV_PORT_FLAG = 0x04
@@ -14,9 +17,6 @@ enum {
 	PROC_VARS  = 4,
 	PROC_PORTS = 4
 };
-
-typedef void (*send_handler)(uint8_t val, int port, void *dat);
-typedef uint8_t (*recv_handler)(int port, void *dat);
 
 enum opcode {
 	OP_INVALID,
@@ -94,35 +94,76 @@ enum opcode {
 	OP_HALT
 };
 
+struct wire {
+	enum { EMPTY, FULL, CONSUMED } status;
+	uint8_t buf;
+};
+
+enum wire_status {
+	BUFFERED,
+	BLOCKED,
+	PROCESSED
+};
+
+struct node_class {
+	bool (*tick)(void *this);
+	void (*free)(void *this);
+};
+
+struct node {
+	const struct node_class *class;
+	void *dat;
+};
+
 struct proc_node {
 	uint16_t isp; // instruction pointer
-	const uint8_t *code; // machine code. Not owned by proc_node
+	const uint8_t *code; // machine code.
 	uint16_t code_size;
 
 	uint8_t *stack;
 	size_t stack_top;
 	size_t stack_cap;
 
-	send_handler send;
-	recv_handler recv;
-
-	bool halted;
-
+	struct wire *wires[PROC_PORTS];
 	uint8_t mem[PROC_VARS];
+};
+
+struct io_node {
+	bool eof_reached;
+	bool has_buf;
+	uint8_t buf;
+
+	struct wire *in_wire;
+	struct wire *out_wire;
+};
+
+struct runtime {
+	struct node *nodes;
+	size_t nnodes;
+	size_t node_cap;
+
+	struct wire *wires;
+	size_t nwires;
+	size_t wire_cap;
 };
 
 
 // bytecode.c
 
 uint16_t addr_value(const uint8_t *src);
-uint8_t recv_dest(const uint8_t *src, bool *is_store);
 
 
 // vm.c
 
-void init_proc_node(struct proc_node *node, const uint8_t code[],
-	size_t code_size, send_handler send, recv_handler recv);
-void clear_proc_node(struct proc_node *node);
-void run(struct proc_node *node, void *handler_dat);
+enum wire_status send(struct wire *wire, uint8_t dat);
+enum wire_status recv(struct wire *wire, uint8_t *dest);
+
+struct node *add_node(struct runtime *env);
+struct node *add_proc_node(struct runtime *env,
+	uint8_t code[], size_t code_size);
+struct node *add_io_node(struct runtime *env);
+struct wire *add_wire(struct runtime *env);
+void run(struct runtime *env);
+void clear_runtime(struct runtime *env);
 
 #endif // BYTECODE_H

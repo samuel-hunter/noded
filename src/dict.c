@@ -11,7 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ast.h"
+#include "noded.h"
+#include "dict.h"
 
 static void init(struct symdict *dict)
 {

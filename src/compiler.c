@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "noded.h"
-#include "bytecode.h"
+#include "vm.h"
 #include "ast.h"
 
 
@@ -998,13 +998,22 @@ uint16_t bytecode_size(const struct proc_decl *d)
 
 // Compile the entire bytecode and return the end of the buffer's
 // result (e.g. if 1 byte was compiled, the return result buf+1).
-uint8_t *compile(const struct proc_decl *d, uint8_t *buf)
+// Meanwhile, it fills port_ids (assumed PROC_PORTS length) and nports
+// respectively with the ids of each port in the processor, and the
+// number of ports the processor has.
+uint8_t *compile(const struct proc_decl *d, uint8_t *buf,
+	size_t *port_ids, int *nports)
 {
 	struct context ctx;
 
 	init_context(&ctx, buf);
 	buf = compile_stmt(d->body, &ctx, buf);
 	resolve_gotos(&ctx);
+
+	if (port_ids)
+		memcpy(port_ids, ctx.ports, sizeof(ctx.ports));
+	if (nports)
+		*nports = ctx.nports;
 
 	return buf;
 }

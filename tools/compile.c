@@ -16,7 +16,7 @@
 
 #include "noded.h"
 #include "ast.h"
-#include "bytecode.h"
+#include "vm.h"
 
 // Number of errors before the tool dies.
 static const size_t max_errors = 10;
@@ -79,7 +79,7 @@ int main(int argc, char **argv)
 		return 1;
 
 	uint8_t *code = ecalloc(code_size, sizeof(*code));
-	compile(&decl->data.proc, code);
+	compile(&decl->data.proc, code, NULL, NULL);
 	if (Globals.errors > 0)
 		return 1;
 

@@ -45,8 +45,13 @@ void vprint_error(const char *srcname, FILE *f, const struct position *pos,
 		break;
 	}
 
-	fprintf(stderr, BOLD "%s:%d:%d:" RESET " %s ",
-	        srcname, pos->lineno, pos->colno, typestr);
+	if (pos) {
+		fprintf(stderr, BOLD "%s:%d:%d:" RESET " %s ",
+		        srcname, pos->lineno, pos->colno, typestr);
+	} else {
+		fprintf(stderr, BOLD "%s:" RESET " %s ",
+			srcname, typestr);
+	}
 
 	// Print the error
 	vfprintf(stderr, fmt, ap);
