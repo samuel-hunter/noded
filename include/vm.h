@@ -108,6 +108,7 @@ enum wire_status {
 struct node_class {
 	bool (*tick)(void *this);
 	void (*free)(void *this);
+	void (*add_wire)(void *this, int porti, struct wire *wire);
 };
 
 struct node {
@@ -137,6 +138,12 @@ struct io_node {
 	struct wire *out_wire;
 };
 
+enum io_port
+{
+	IO_IN,
+	IO_OUT
+};
+
 struct runtime {
 	struct node *nodes;
 	size_t nnodes;
@@ -162,7 +169,8 @@ struct node *add_node(struct runtime *env);
 struct node *add_proc_node(struct runtime *env,
 	uint8_t code[], size_t code_size);
 struct node *add_io_node(struct runtime *env);
-struct wire *add_wire(struct runtime *env);
+void add_wire(struct runtime *env, struct node *src, int src_porti,
+	struct node *dest, int dest_porti);
 void run(struct runtime *env);
 void clear_runtime(struct runtime *env);
 

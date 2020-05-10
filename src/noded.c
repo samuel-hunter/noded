@@ -118,23 +118,11 @@ int main(int argc, char **argv)
 
 	// Manually route all the wires here.
 	// Todo: implement the routing module to route for us.
-	if (porti = id_port(port_ids, sym_id(&dict, "in")), porti >= 0) {
-		struct proc_node *proc = proc_node->dat;
-		struct io_node *io = io_node->dat;
-		struct wire *wire = add_wire(&env);
+	if (porti = id_port(port_ids, sym_id(&dict, "in")), porti >= 0)
+		add_wire(&env, io_node, IO_IN, proc_node, porti);
 
-		proc->wires[porti] = wire;
-		io->in_wire = wire;
-	}
-
-	if (porti = id_port(port_ids, sym_id(&dict, "out")), porti >= 0) {
-		struct proc_node *proc = proc_node->dat;
-		struct io_node *io = io_node->dat;
-		struct wire *wire = add_wire(&env);
-
-		proc->wires[porti] = wire;
-		io->out_wire = wire;
-	}
+	if (porti = id_port(port_ids, sym_id(&dict, "out")), porti >= 0)
+		add_wire(&env, proc_node, porti, io_node, IO_OUT);
 
 	// free the dict and AST, since we no longer need it.
 	free_decl(decl);

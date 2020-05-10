@@ -14,18 +14,22 @@
 
 static bool tick_proc_node(void *this);
 static void free_proc_node(void *this);
+static void add_wire_to_proc_node(void *this, int porti, struct wire *wire);
 
 static const struct node_class proc_node_class = {
 	.tick = &tick_proc_node,
-	.free = &free_proc_node
+	.free = &free_proc_node,
+	.add_wire = &add_wire_to_proc_node
 };
 
 static bool tick_io_node(void *this);
 static void free_io_node(void *this);
+static void add_wire_to_io_node(void *this, int porti, struct wire *wire);
 
 static const struct node_class io_node_class = {
 	.tick = &tick_io_node,
-	.free = &free_io_node
+	.free = &free_io_node,
+	.add_wire = &add_wire_to_io_node
 };
 
 // Send a message through the wire.
@@ -387,8 +391,35 @@ static void free_io_node(void *this)
 	free(io);
 }
 
-struct wire *add_wire(struct runtime *env)
+static void add_wire_to_proc_node(void *this, int porti, struct wire *wire)
 {
+	struct proc_node *proc = this;
+
+	assert(porti >= 0 && porti < PROC_PORTS);
+	proc->wires[porti] = wire;
+}
+
+static void add_wire_to_io_node(void *this, int porti, struct wire *wire)
+{
+	struct io_node *io = this;
+
+	switch (porti) {
+	case IO_IN:
+		io->in_wire = wire;
+		break;
+	case IO_OUT:
+		io->out_wire = wire;
+		break;
+	default:
+		assert(false);
+	}
+}
+
+void add_wire(struct runtime *env, struct node *src, int src_porti,
+	struct node *dest, int dest_porti)
+{
+	struct wire *wire;
+
 	if (env->nwires == 0) {
 		env->wire_cap = 8;
 		env->wires = ecalloc(env->wire_cap, sizeof(*env->wires));
@@ -398,7 +429,10 @@ struct wire *add_wire(struct runtime *env)
 			env->wire_cap * sizeof(*env->wires));
 	}
 
-	return &env->wires[env->nwires++];
+	wire = &env->wires[env->nwires++];
+
+	src->class->add_wire(src->dat, src_porti, wire);
+	dest->class->add_wire(dest->dat, dest_porti, wire);
 }
 
 void run(struct runtime *env)

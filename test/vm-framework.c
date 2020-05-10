@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h> // free
@@ -9,10 +10,12 @@
 
 static bool tick_test_node(void *this);
 static void free_test_node(void *this);
+static void add_wire_to_test_node(void *this, int porti, struct wire *wire);
 
 static struct node_class test_node_class = {
 	.tick = &tick_test_node,
-	.free = &free_test_node
+	.free = &free_test_node,
+	.add_wire = &add_wire_to_test_node
 };
 
 struct test_node {
@@ -94,6 +97,14 @@ static bool tick_test_node(void *this)
 	return made_progress;
 }
 
+static void add_wire_to_test_node(void *this, int porti, struct wire *wire)
+{
+	struct test_node *test = this;
+
+	assert(porti >= 0 && porti < PROC_PORTS);
+	test->wires[porti] = wire;
+}
+
 static void free_test_node(void *this)
 {
 	free(this);
@@ -103,14 +114,11 @@ void test_code(struct vm_test *vm_test)
 {
 	struct runtime env = {0};
 	struct node *test_node, *proc_node;
-	struct proc_node *proc;
 	struct test_node *test;
-	struct wire *wire;
 
 	test_node = add_test_node(&env, vm_test);
 	proc_node = add_proc_node(&env, vm_test->code, vm_test->code_size);
 
-	proc = proc_node->dat;
 	test = test_node->dat;
 
 	// Wire up all the nodes.
@@ -120,9 +128,10 @@ void test_code(struct vm_test *vm_test)
 
 		switch (type) {
 		case SEND_PORT:
+			add_wire(&env, proc_node, i, test_node, i);
+			break;
 		case RECV_PORT:
-			wire = add_wire(&env);
-			proc->wires[i] = test->wires[i] = wire;
+			add_wire(&env, test_node, i, proc_node, i);
 			break;
 		default:
 			break;
