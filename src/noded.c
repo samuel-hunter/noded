@@ -105,12 +105,10 @@ int main(int argc, char **argv)
 
 	// Compile the processor from its declaration
 	code_size = bytecode_size(&decl->data.proc);
-	if (has_errors()) // check errors here because we'll be
-		return 1; // allocating memory that needs to have a
-			  // reliable return value.
-
 	code = ecalloc(code_size, sizeof(*code));
 	compile(&decl->data.proc, code, port_ids, NULL);
+	if (has_errors())
+		return 1;
 
 	// Add the proc and io nodes.
 	io_node = add_io_node(&env);

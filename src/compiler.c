@@ -92,9 +92,8 @@ static uint8_t *asm_push(uint8_t val, uint8_t *buf)
 // Assemble an address.
 static uint8_t *asm_addr(uint16_t addr, uint8_t *buf)
 {
-	*buf++ = (addr >> 8) & 0xff;
-	*buf++ = addr & 0xff;
-	return buf;
+	*((uint16_t *)buf) = addr;
+	return buf+2;
 }
 
 // Assemble a jump statement and its address.
@@ -263,15 +262,13 @@ static const uint16_t *label_addr(const struct context *ctx, size_t label_id)
 // write the pointer where the goto label's address should be stored.
 static uint8_t **add_goto(struct context *ctx, const struct branch_stmt *branch)
 {
-	if (!ctx->gotos) {
-		// Lazily allocate a vector only when needed (most
-		// processors probably will not have any goto's)
-		ctx->gotos_cap = 4;
-		ctx->gotos = ecalloc(ctx->gotos_cap,
-			sizeof(*ctx->gotos));
-	} else if (ctx->ngotos == ctx->gotos_cap) {
-		// Expand when necessary
-		ctx->gotos_cap *= 2;
+	if (ctx->ngotos == ctx->gotos_cap) {
+		// Expand or allocate when necessary
+		if (ctx->gotos_cap == 0) {
+			ctx->gotos_cap = 4;
+		} else {
+			ctx->gotos_cap *= 2;
+		}
 		ctx->gotos = erealloc(ctx->gotos,
 			ctx->gotos_cap*sizeof(*ctx->gotos));
 	}
@@ -292,15 +289,13 @@ static void add_label(struct context *ctx, const struct labeled_stmt *label,
 			"Label defined multiple times");
 	}
 
-	if (!ctx->labels) {
-		// Lazily allocate a vector only when needed. (most
-		// processors probably will not have any labels)
-		ctx->labels_cap = 4;
-		ctx->labels = ecalloc(ctx->labels_cap,
-			sizeof(*ctx->labels));
-	} else if (ctx->nlabels == ctx->labels_cap) {
-		// Expand vector when necessary
-		ctx->labels_cap *= 2;
+	if (ctx->nlabels == ctx->labels_cap) {
+		// Expand or allocate vector when necessary
+		if (ctx->labels_cap == 0) {
+			ctx->labels_cap = 4;
+		} else {
+			ctx->labels_cap *= 2;
+		}
 		ctx->labels = erealloc(ctx->labels,
 			ctx->labels_cap*sizeof(*ctx->labels));
 	}

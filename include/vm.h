@@ -155,11 +155,6 @@ struct runtime {
 };
 
 
-// bytecode.c
-
-uint16_t addr_value(const uint8_t *src);
-
-
 // vm.c
 
 enum wire_status send(struct wire *wire, uint8_t dat);

@@ -233,14 +233,14 @@ static bool tick_proc_node(void *this)
 		push(proc, !pop(proc));
 		break;
 	case OP_JMP:
-		proc->isp = addr_value(&proc->code[proc->isp]);
 		advance = 0;
+		proc->isp = *((uint16_t *) &proc->code[proc->isp+1]);
 		break;
 	case OP_TJMP:
 		advance = 3;
 
 		if (pop(proc)) {
-			proc->isp = addr_value(&proc->code[proc->isp]);
+			proc->isp = *((uint16_t *) &proc->code[proc->isp+1]);
 			advance = 0;
 		}
 		break;
@@ -248,7 +248,7 @@ static bool tick_proc_node(void *this)
 		advance = 3;
 
 		if (!pop(proc)) {
-			proc->isp = addr_value(&proc->code[proc->isp]);
+			proc->isp = *((uint16_t *) &proc->code[proc->isp+1]);
 			advance = 0;
 		}
 		break;
@@ -420,16 +420,20 @@ void add_wire(struct runtime *env, struct node *src, int src_porti,
 {
 	struct wire *wire;
 
-	if (env->nwires == 0) {
-		env->wire_cap = 8;
-		env->wires = ecalloc(env->wire_cap, sizeof(*env->wires));
-	} else if (env->nwires == env->wire_cap) {
-		env->wire_cap *= 2;
+	if (env->nwires == env->wire_cap) {
+		// Expand or allocate when necessary
+		if (env->wire_cap == 0) {
+			env->wire_cap = 8;
+		} else {
+			env->wire_cap *= 2;
+		}
+
 		env->wires = erealloc(env->wires,
 			env->wire_cap * sizeof(*env->wires));
 	}
 
 	wire = &env->wires[env->nwires++];
+	memset(wire, 0, sizeof(*wire));
 
 	src->class->add_wire(src->dat, src_porti, wire);
 	dest->class->add_wire(dest->dat, dest_porti, wire);

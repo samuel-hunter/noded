@@ -14,19 +14,8 @@
 #include "noded.h"
 #include "dict.h"
 
-static void init(struct symdict *dict)
-{
-	dict->cap = 8;
-	dict->syms = ecalloc(dict->cap, sizeof(*dict->syms));
-}
-
 size_t sym_id(struct symdict *dict, const char *sym)
 {
-	// Fresh dict. This allows sym_id to be called even with a
-	// dict's zero-value.
-	if (dict->cap == 0)
-		init(dict);
-
 	for (size_t i = 0; i < dict->len; i++) {
 		if (strcmp(dict->syms[i], sym) == 0)
 			return i;
@@ -34,7 +23,11 @@ size_t sym_id(struct symdict *dict, const char *sym)
 
 	// No strings matched; add a new one to the array.
 	if (dict->len == dict->cap) {
-		dict->cap *= 2;
+		if (dict->cap == 0) {
+			dict->cap = 8;
+		} else {
+			dict->cap *= 2;
+		}
 		dict->syms = erealloc(dict->syms,
 			dict->cap * sizeof(*dict->syms));
 	}
@@ -49,17 +42,6 @@ const char *id_sym(const struct symdict *dict, size_t id)
 {
 	if (id >= dict->len) return NULL;
 	return dict->syms[id];
-}
-
-size_t dict_size(const struct symdict *dict)
-{
-	size_t result = sizeof(*dict) + dict->cap*sizeof(dict->syms);
-
-	for (size_t i = 0; i < dict->len; i++) {
-		result += strlen(dict->syms[i]) + 1;
-	}
-
-	return result;
 }
 
 void clear_dict(struct symdict *dict)

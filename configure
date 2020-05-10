@@ -17,14 +17,14 @@ debug_flags=false
 
 bins () {
     # Anatomy: mkbin TYPE NAME OBJECTS...
-    mkbin target "$target" src/alloc src/ast src/bytecode src/compiler src/dict \
+    mkbin target "$target" src/alloc src/ast src/compiler src/dict \
              src/err src/noded src/parser src/scanner src/token src/vm
-    mkbin tool disasm src/alloc src/bytecode tools/disasm
+    mkbin tool disasm src/alloc tools/disasm
     mkbin tool compile src/alloc src/ast src/compiler src/dict src/err \
            src/parser src/scanner src/token tools/compile
-    mkbin test test-vm src/alloc src/bytecode src/vm \
+    mkbin test test-vm src/alloc src/vm \
            test/test-vm test/vm-framework
-    mkbin test test-compiler src/alloc src/ast src/bytecode src/compiler \
+    mkbin test test-compiler src/alloc src/ast src/compiler \
            src/dict src/err src/parser src/scanner src/token src/vm \
            test/test-compiler test/vm-framework
 }

@@ -122,7 +122,7 @@ int main(int argc, char **argv)
 		case OP_FJMP:
 		case OP_TJMP:
 			advance = 3;
-			printf("0x%04x\n", addr_value(&code[isp]));
+			printf("0x%04x\n", *((uint16_t *) &code[isp+1]));
 			break;
 			break;
 		default:

@@ -13,7 +13,6 @@ struct symdict {
 
 size_t sym_id(struct symdict *dict, const char *sym);
 const char *id_sym(const struct symdict *dict, size_t id);
-size_t dict_size(const struct symdict *dict);
 void clear_dict(struct symdict *dict);
 
 

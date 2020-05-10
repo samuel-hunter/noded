@@ -432,7 +432,7 @@ int main(void)
 	test_vm(&test_logical);
 
 	uint8_t test_jump_c[] = {
-		OP_JMP, 0, 6, // 6 = address to halt instruction
+		OP_JMP, 6, 0, // 6 = address to halt instruction
 
 		// Skip this instruction
 		OP_PUSH, 10,
@@ -449,7 +449,7 @@ int main(void)
 
 	uint8_t test_tjmp_c[] = {
 		OP_PUSH, 1,
-		OP_TJMP, 0, 8, // 8 = address to PUSH 0
+		OP_TJMP, 8, 0, // 8 = address to PUSH 0
 
 		// This should be skipped because JTMP pops a truthy
 		// value.
@@ -457,7 +457,7 @@ int main(void)
 		OP_SEND0, // Expected: skipped
 
 		OP_PUSH, 0,
-		OP_TJMP, 0, 16, // 16 = address to HALT
+		OP_TJMP, 16, 0, // 16 = address to HALT
 
 		// This should *not* be skipped because TJMP pops a
 		// falsey value.

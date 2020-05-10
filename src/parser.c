@@ -631,12 +631,7 @@ static struct stmt *parse_block_stmt(struct parser *p)
 	}
 	expect(p, RBRACE, NULL);
 
-	if (nstmts == 0) {
-		free(stmts);
-		stmts = NULL;
-	} else {
-		stmts = erealloc(stmts, nstmts * sizeof(*stmts));
-	}
+	stmts = erealloc(stmts, nstmts * sizeof(*stmts));
 
 	result = new_stmt(BLOCK_STMT);
 	result->data.block.start = start.pos;
