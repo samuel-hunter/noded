@@ -13,8 +13,7 @@
 #include <errno.h>
 
 #include "noded.h"
-#include "ast.h"
-#include "vm.h"
+#include "resolve.h"
 
 
 static struct {
@@ -27,16 +26,6 @@ static struct {
 
 // Number of errors before the parser panics.
 static const size_t max_errors = 10;
-
-// Return the port number from its id, or -1 if there is no port.
-static int id_port(size_t port_ids[], size_t id)
-{
-	for (int i = 0; i < PROC_PORTS; i++) {
-		if (id == port_ids[i]) return i;
-	}
-
-	return -1;
-}
 
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...)
@@ -72,19 +61,33 @@ int main(int argc, char **argv)
 {
 	struct symdict dict = {0}; // a zero-value dict is freshly initialized.
 	struct runtime env = {0}; // a zero-value runtime is freshly initialized.
+	struct resolve_ctx rctx = {0}; // ...ditto
 	struct parser parser;
 	struct decl *decl;
-	struct node *io_node, *proc_node;
+	struct node *node;
 	size_t port_ids[PROC_PORTS];
+
+	size_t codearr_cap = 0;
+	size_t ncode = 0;
+	uint8_t **codearr = NULL;
 	size_t code_size;
-	uint8_t *code;
-	int porti;
 
 	if (argc != 2) {
 		// Noded requires a file argument
 		fprintf(stderr, "Usage: %s FILE\n", argv[0]);
 		return 1;
 	}
+
+	// Add the IO node
+	node = add_io_node(&env);
+
+	// IMPORTANT: the first element *must* be in, and second
+	// *must* be out, to match the order of the enum io_port. See
+	// vm.h.
+	port_ids[0] = sym_id(&dict, "in");
+	port_ids[1] = sym_id(&dict, "out");
+	resolve_add_node(&rctx, node, sym_id(&dict, "io"), port_ids);
+	memset(port_ids, 0, sizeof(port_ids));
 
 	// Open the file
 	Globals.filename = argv[1];
@@ -94,43 +97,67 @@ int main(int argc, char **argv)
 
 	// Grab a declaration (hopefully a processor decl)
 	init_parser(&parser, Globals.f, &dict);
-	decl = parse_decl(&parser);
-	if (has_errors())
-		return 1;
 
-	if (decl->type != PROC_DECL) {
-		fprintf(stderr, "Expected proc decl\n");
-		return 1;
+	while (true) {
+		decl = parse_decl(&parser);
+		if (has_errors())
+			return 1;
+
+		switch (decl->type) {
+		case PROC_DECL:
+			if (codearr_cap == ncode) {
+				if (codearr_cap == 0) {
+					codearr_cap = 8;
+				} else {
+					codearr_cap *= 2;
+				}
+				codearr = erealloc(codearr,
+					codearr_cap*sizeof(*codearr));
+			}
+
+			// Compile the processor from its declaration
+			code_size = bytecode_size(&decl->data.proc);
+			codearr[ncode] = ecalloc(code_size, sizeof(*codearr[ncode]));
+			compile(&decl->data.proc, codearr[ncode], port_ids, NULL);
+			if (has_errors())
+				return 1;
+
+			// Add the proc and io nodes.
+			resolve_add_node(&rctx,
+				add_proc_node(&env, codearr[ncode], code_size),
+				decl->data.proc.name_id, port_ids);
+
+			memset(port_ids, 0, sizeof(port_ids));
+			ncode++;
+			break;
+		case WIRE_DECL:
+			resolve(&rctx, &env, &decl->data.wire);
+			break;
+		case EOF_DECL:
+			free_decl(decl);
+			goto stop_parsing;
+		default:
+			errx(1, "Unexpected declaration type.");
+		}
+
+		free_decl(decl);
+		if (has_errors())
+			return 1;
 	}
 
-	// Compile the processor from its declaration
-	code_size = bytecode_size(&decl->data.proc);
-	code = ecalloc(code_size, sizeof(*code));
-	compile(&decl->data.proc, code, port_ids, NULL);
-	if (has_errors())
-		return 1;
-
-	// Add the proc and io nodes.
-	io_node = add_io_node(&env);
-	proc_node = add_proc_node(&env, code, code_size);
-
-	// Manually route all the wires here.
-	// Todo: implement the routing module to route for us.
-	if (porti = id_port(port_ids, sym_id(&dict, "in")), porti >= 0)
-		add_wire(&env, io_node, IO_IN, proc_node, porti);
-
-	if (porti = id_port(port_ids, sym_id(&dict, "out")), porti >= 0)
-		add_wire(&env, proc_node, porti, io_node, IO_OUT);
+stop_parsing:
 
 	// free the dict and AST, since we no longer need it.
-	free_decl(decl);
 	clear_dict(&dict);
 	fclose(Globals.f);
 
 	// Run, clear, and exit.
 	run(&env);
 	clear_runtime(&env);
-	free(code);
+
+	for (size_t i = 0; i < ncode; i++)
+		free(codearr[i]);
+	free(codearr);
 
 	return 0;
 }

@@ -11,22 +11,23 @@ cd "$(dirname "$0")"
 set -u
 
 target=noded
-includes="include/noded.h include/ast.h include/dict.h include/vm.h test/vm-framework.h"
+includes="include/noded.h include/ast.h include/dict.h include/resolve.h include/vm.h test/vm-framework.h"
 
 debug_flags=false
 
 bins () {
     # Anatomy: mkbin TYPE NAME OBJECTS...
     mkbin target "$target" src/alloc src/ast src/compiler src/dict \
-             src/err src/noded src/parser src/scanner src/token src/vm
+          src/err src/noded src/parser src/resolve src/scanner  \
+          src/token src/vm
     mkbin tool disasm src/alloc tools/disasm
     mkbin tool compile src/alloc src/ast src/compiler src/dict src/err \
-           src/parser src/scanner src/token tools/compile
+          src/parser src/scanner src/token tools/compile
     mkbin test test-vm src/alloc src/vm \
-           test/test-vm test/vm-framework
+          test/test-vm test/vm-framework
     mkbin test test-compiler src/alloc src/ast src/compiler \
-           src/dict src/err src/parser src/scanner src/token src/vm \
-           test/test-compiler test/vm-framework
+          src/dict src/err src/parser src/scanner src/token src/vm \
+          test/test-compiler test/vm-framework
 }
 
 for i in "$@"; do

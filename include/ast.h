@@ -151,8 +151,9 @@ struct port {
 
 struct decl {
 	enum decl_type {
-		BAD_DECL, PROC_DECL, PROC_COPY_DECL,
-		BUF_DECL, STACK_DECL, WIRE_DECL
+		BAD_DECL, EOF_DECL, PROC_DECL,
+		PROC_COPY_DECL, BUF_DECL, STACK_DECL,
+		WIRE_DECL
 	} type;
 	union {
 		struct bad_decl {

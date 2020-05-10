@@ -956,6 +956,8 @@ struct decl *parse_decl(struct parser *parser)
 	struct decl *result;
 
 	switch (parser->current.tok) {
+	case TOK_EOF:
+		return new_decl(EOF_DECL);
 	case PROCESSOR:
 		return parse_proc_node_decl(parser);
 	case BUFFER:

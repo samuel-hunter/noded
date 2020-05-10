@@ -50,7 +50,7 @@ enum wire_status send(struct wire *wire, uint8_t dat)
 	}
 
 	// Should never be here unless all hell is loose.
-	assert(false);
+	errx(1, "Internal error: invalid wire status");
 }
 
 // Request a message from the wire.
