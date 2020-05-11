@@ -280,8 +280,7 @@ array. `%elm` represents the element of the array that the index is
 pointing to. In C-like terms, accessing `%idx` and `%elm` is like
 accessing the variable `idx` and the expression `buffer[idx]`.
 
-Unlike processor nodes, the ports of a buffer node can be wired to any
-number of other nodes.
+`%idx` and `%elm` can only be conected to one other port.
 
 All buffers have a size of `256` elements, the maximum size of a byte
 plus one. As such, there is no exceptional case where an element

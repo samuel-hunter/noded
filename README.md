@@ -8,11 +8,16 @@ A Noded program consists of a collection of nodes operating at the
 same time and communicating to each other through ports wired to
 each other.
 
+This project is maid half as a toy implementation, and half as a
+thought experiment for a concurrent language. Please don't have any
+expectations of it being fast, or accurate, or resilient to breaking
+code.
+
 ## Progress
 
-We got a working interpreter! Currently, it interprets only a single
-node, and all message-sending is between that node and standard
-input/output.
+All legal code should be fully functioning. The main three areas of
+focus are checking the validity of code (specifically wire connections
+and their direction), optimizing the compiler, and code cleanliness.
 
 ## Language Specification
 
@@ -24,61 +29,59 @@ be found in [SPEC.md](./SPEC.md).
 ### Hello World
 
 ```c
-// Implement a `report` processor node that interacts with a string
-// node to send all data within the string once out.
+/* hello.nod
+ * Print Hello World and exit.
+ */
+
+// Create a processor node `report`.
+//  Processor nodes execute predefined code ad infinitum
+//  and can only contain four port and four variables.
+
+// Neither ports nor variables need to be declared, because
+//  they can be inferred from the code and the scope is the
+//  entire machine.
 processor report {
-	// All code within a processor node executes forever until
-	// it reaches a `halt` statement, or the program stops
-	// because all nodes stopped running (read: a deadlock)
+	// Push the value of variable $1 to port %idx.
+	%idx <- $i; // All variables, like $1 start out at zero.
+	$i++;
 
-	// %ports and $variables don't need to be declared, and their
-	// scope is the whole processor node. Variables always start out
-	// at 0 at the beginning of the program.
-
-	// Send the state of the variable $i to the output-only port
-	// %idx.
-	%idx <- $i;
-	$i++; // Increment $i by 1.
-
-	// Store a message from the input-only port %chr into $mem.
-	$mem <- %chr;
-
-	// Halt forever when $mem reads the terminating null character.
+	// Read from the port %in and store in the variable $mem.
+	$mem <- %in;
 	if ($mem == 0)
-		halt;
+		halt; // Stop this node from running forever.
 
-	// Relay the message to the output-only port %out.
+	// Relay the value from %chr to the port %out.
 	%out <- $mem;
 }
 
-// Add a buffer node that stores "Hello, World!\n" at the beginning
-// of the program. Buffer nodes have the ports %idx and %chr, which
-// respectively store the buffer's active index, and the buffer's
-// character at that index.
+// String nodes hold an array of characters initialized at its
+//  start and can be interacted with through its %idx and %elm
+//  ports. Writing to %idx changes where the position it's currently
+//  pointing to, and writing to/reading from the port %elm interacts
+//  with that current character as you would expect.
 buffer message = "Hello, World!\n";
 
-// Start wiring the nodes together.
 
-// Messages from the report node's %idx port is sent to
-// the buffer node's port.
+// WIRING
+
+// Send messages from the report node's %idx port
+//  to the message node's %idx port.
 report.idx -> message.idx;
 
-// Whenever the report node reads from %chr, it takes the buffer's
-// character at that index.
-message.chr -> report.chr;
+// Same thing here.
+message.elm -> report.in;
 
-// Send the report's output to the console via the port `out` from
-// unique node `io`.
+// Wire report.out to the special node `io.out`, which sends the number
+//  to standard output as a character.
 report.out -> io.out;
 ```
 
-Without comments:
+Without comments, and slightly more compacted:
 ```c
 processor report {
-	%idx <- $i;
-	$i++;
+	%idx <- $i++;
+	$mem <- %in;
 
-	$mem <- %chr;
 	if ($mem == 0)
 		halt;
 
@@ -88,7 +91,7 @@ processor report {
 buffer message = "Hello, World!\n";
 
 report.idx -> message.idx;
-message.chr -> report.chr;
+message.elm -> report.in;
 report.out -> io.out;
 ```
 
@@ -102,6 +105,9 @@ processor cat {
 	// forever
 	$chr <- %in;
 	%out <- $chr;
+    
+    // You could also wire them up directly via:
+    //   %out <- %in;
 }
 
 // The special node `io` has a port `in` which will read from the
@@ -110,7 +116,8 @@ io.in -> cat.in;
 cat.out -> io.out;
 ```
 
-The `cat` node may be explicit, but is technically unnecessary:
+The preivous `cat` node was explicit, and the processor wasn't
+technically unnecessary:
 
 ```c
 // input and output can be piped directly to each other.
