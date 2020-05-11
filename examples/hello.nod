@@ -14,8 +14,8 @@ processor report {
 	%idx <- $i; // All variables, like $1 start out at zero.
 	$i++;
 
-	// Read from the port %chr and store in the variable $mem.
-	$mem <- %chr;
+	// Read from the port %in and store in the variable $mem.
+	$mem <- %in;
 	if ($mem == 0)
 		halt; // Stop this node from running forever.
 
@@ -24,9 +24,9 @@ processor report {
 }
 
 // String nodes hold an array of characters initialized at its
-//  start and can be interacted with through its %idx and %chr
+//  start and can be interacted with through its %idx and %elm
 //  ports. Writing to %idx changes where the position it's currently
-//  pointing to, and writing to/reading from the port %chr interacts
+//  pointing to, and writing to/reading from the port %elm interacts
 //  with that current character as you would expect.
 buffer message = "Hello, World!\n";
 
@@ -38,7 +38,7 @@ buffer message = "Hello, World!\n";
 report.idx -> message.idx;
 
 // Same thing here.
-message.chr -> report.chr;
+message.elm -> report.in;
 
 // Wire report.out to the special node `io.out`, which sends the number
 //  to standard output as a character.

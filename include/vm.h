@@ -95,8 +95,13 @@ enum opcode {
 };
 
 struct wire {
-	enum { EMPTY, FULL, CONSUMED } status;
+	enum { EMPTY, HUNGRY, FULL, CONSUMED } status;
 	uint8_t buf;
+
+	// not about pointer ownership, but rather who sends data
+	// through the wire versus receiving it. Specifically, the
+	// pointer is of `(struct node).dat`.
+	void *owner;
 };
 
 enum wire_status {
@@ -105,43 +110,27 @@ enum wire_status {
 	PROCESSED
 };
 
+struct node {
+	const struct node_class *class;
+	void *dat;
+};
+
 struct node_class {
 	bool (*tick)(void *this);
 	void (*free)(void *this);
 	void (*add_wire)(void *this, int porti, struct wire *wire);
 };
 
-struct node {
-	const struct node_class *class;
-	void *dat;
-};
-
-struct proc_node {
-	uint16_t isp; // instruction pointer
-	const uint8_t *code; // machine code.
-	uint16_t code_size;
-
-	uint8_t *stack;
-	size_t stack_top;
-	size_t stack_cap;
-
-	struct wire *wires[PROC_PORTS];
-	uint8_t mem[PROC_VARS];
-};
-
-struct io_node {
-	bool eof_reached;
-	bool has_buf;
-	uint8_t buf;
-
-	struct wire *in_wire;
-	struct wire *out_wire;
-};
-
 enum io_port
 {
 	IO_IN,
 	IO_OUT
+};
+
+enum buf_port
+{
+	BUF_IDX,
+	BUF_ELM
 };
 
 struct runtime {
@@ -164,6 +153,7 @@ struct node *add_node(struct runtime *env);
 struct node *add_proc_node(struct runtime *env,
 	uint8_t code[], size_t code_size);
 struct node *add_io_node(struct runtime *env);
+struct node *add_buf_node(struct runtime *env, const uint8_t data[]);
 void add_wire(struct runtime *env, struct node *src, int src_porti,
 	struct node *dest, int dest_porti);
 void run(struct runtime *env);

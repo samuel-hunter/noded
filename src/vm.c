@@ -12,9 +12,23 @@
 #include "noded.h"
 #include "vm.h"
 
+
 static bool tick_proc_node(void *this);
 static void free_proc_node(void *this);
 static void add_wire_to_proc_node(void *this, int porti, struct wire *wire);
+
+struct proc_node {
+	uint16_t isp; // instruction pointer
+	const uint8_t *code; // machine code.
+	uint16_t code_size;
+
+	uint8_t *stack;
+	size_t stack_top;
+	size_t stack_cap;
+
+	struct wire *wires[PROC_PORTS];
+	uint8_t mem[PROC_VARS];
+};
 
 static const struct node_class proc_node_class = {
 	.tick = &tick_proc_node,
@@ -22,14 +36,43 @@ static const struct node_class proc_node_class = {
 	.add_wire = &add_wire_to_proc_node
 };
 
+
 static bool tick_io_node(void *this);
 static void free_io_node(void *this);
 static void add_wire_to_io_node(void *this, int porti, struct wire *wire);
+
+struct io_node {
+	bool eof_reached;
+	bool has_buf;
+	uint8_t buf;
+
+	struct wire *in_wire;
+	struct wire *out_wire;
+};
 
 static const struct node_class io_node_class = {
 	.tick = &tick_io_node,
 	.free = &free_io_node,
 	.add_wire = &add_wire_to_io_node
+};
+
+
+static bool tick_buf_node(void *this);
+static void free_buf_node(void *this);
+static void add_wire_to_buf_node(void *this, int porti, struct wire *wire);
+
+struct buf_node {
+	uint8_t idx;
+	uint8_t data[BUFFER_NODE_MAX];
+
+	struct wire *idx_wire;
+	struct wire *elm_wire;
+};
+
+static const struct node_class buf_node_class = {
+	.tick = &tick_buf_node,
+	.free = &free_buf_node,
+	.add_wire = &add_wire_to_buf_node
 };
 
 // Send a message through the wire.
@@ -39,6 +82,7 @@ enum wire_status send(struct wire *wire, uint8_t dat)
 
 	switch (wire->status) {
 	case EMPTY:
+	case HUNGRY:
 		wire->buf = dat;
 		wire->status = FULL;
 		return BUFFERED;
@@ -58,13 +102,24 @@ enum wire_status recv(struct wire *wire, uint8_t *dest)
 {
 	if (!wire) return BLOCKED;
 
-	if (wire->status == FULL) {
+	switch (wire->status) {
+	case FULL:
 		*dest = wire->buf;
 		wire->status = CONSUMED;
 		return PROCESSED;
-	} else {
+	case EMPTY:
+		wire->status = HUNGRY;
+		return BUFFERED; // Nothing got processd, but we did
+				 // send an indicator asking for
+				 // something.
+	case HUNGRY:
+		return BLOCKED;
+	case CONSUMED:
 		return BLOCKED;
 	}
+
+	// Should never be here unless all hell is loose.
+	errx(1, "Internal error: invalid wire status");
 }
 
 // Reserve a place for for the node and return its pointer.
@@ -111,6 +166,19 @@ struct node *add_io_node(struct runtime *env)
 
 	node->class = &io_node_class;
 	node->dat = io;
+
+	return node;
+}
+
+struct node *add_buf_node(struct runtime *env, const uint8_t data[])
+{
+	struct node *node = add_node(env);
+	struct buf_node *buf = ecalloc(1, sizeof(*buf));
+
+	node->class = &buf_node_class;
+	node->dat = buf;
+
+	memcpy(buf->data, data, sizeof(buf->data));
 
 	return node;
 }
@@ -303,8 +371,14 @@ static bool tick_proc_node(void *this)
 	case OP_RECV2:
 	case OP_RECV3:
 		wire = proc->wires[instr - OP_RECV0];
-		if (recv(wire, &val1) == BLOCKED)
+		switch (recv(wire, &val1)) {
+		case BUFFERED:
+			return true;
+		case BLOCKED:
 			return false;
+		case PROCESSED:
+			break;
+		}
 
 		push(proc, val1);
 		break;
@@ -362,6 +436,33 @@ static bool tick_io_node(void *this)
 	return has_progressed;
 }
 
+static bool tick_buf_node(void *this)
+{
+	struct buf_node *buf = this;
+	bool has_progressed = false;
+
+	if (recv(buf->idx_wire, &buf->idx) == PROCESSED)
+		has_progressed = true;
+
+	if (buf->elm_wire->owner == this) {
+		switch (buf->elm_wire->status) {
+		case HUNGRY: // send element only when requested
+		case CONSUMED: // acknowledge that the element was consumed
+			send(buf->elm_wire, buf->data[buf->idx]);
+			has_progressed = true;
+			break;
+		default:
+			break;
+		}
+	} else if (buf->elm_wire->owner != this) {
+		if (recv(buf->elm_wire, &buf->data[buf->idx]) == PROCESSED)
+			has_progressed = true;
+	}
+
+	return has_progressed;
+}
+
+
 static bool run_node(struct node *node)
 {
 	bool (*tick)(void *) = node->class->tick;
@@ -391,6 +492,13 @@ static void free_io_node(void *this)
 	free(io);
 }
 
+static void free_buf_node(void *this)
+{
+	struct buf_node *buf = this;
+
+	free(buf);
+}
+
 static void add_wire_to_proc_node(void *this, int porti, struct wire *wire)
 {
 	struct proc_node *proc = this;
@@ -409,6 +517,22 @@ static void add_wire_to_io_node(void *this, int porti, struct wire *wire)
 		break;
 	case IO_OUT:
 		io->out_wire = wire;
+		break;
+	default:
+		assert(false);
+	}
+}
+
+static void add_wire_to_buf_node(void *this, int porti, struct wire *wire)
+{
+	struct buf_node *buf = this;
+
+	switch (porti) {
+	case BUF_IDX:
+		buf->idx_wire = wire;
+		break;
+	case BUF_ELM:
+		buf->elm_wire = wire;
 		break;
 	default:
 		assert(false);
@@ -437,6 +561,7 @@ void add_wire(struct runtime *env, struct node *src, int src_porti,
 
 	src->class->add_wire(src->dat, src_porti, wire);
 	dest->class->add_wire(dest->dat, dest_porti, wire);
+	wire->owner = src->dat;
 }
 
 void run(struct runtime *env)

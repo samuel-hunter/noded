@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 	// Add the IO node
 	node = add_io_node(&env);
 
-	// IMPORTANT: the first element *must* be in, and second
+	// HACK: the first element *must* be in, and second
 	// *must* be out, to match the order of the enum io_port. See
 	// vm.h.
 	port_ids[0] = sym_id(&dict, "in");
@@ -129,6 +129,15 @@ int main(int argc, char **argv)
 
 			memset(port_ids, 0, sizeof(port_ids));
 			ncode++;
+			break;
+		case BUF_DECL:
+			// HACK: the symbols for port_ids *must* match
+			// the order of enum buf_port found in vm.h.
+			port_ids[0] = sym_id(&dict, "idx");
+			port_ids[1] = sym_id(&dict, "elm");
+			resolve_add_node(&rctx, add_buf_node(&env, decl->data.buf.data),
+				decl->data.buf.name_id, port_ids);
+			memset(port_ids, 0, sizeof(port_ids));
 			break;
 		case WIRE_DECL:
 			resolve(&rctx, &env, &decl->data.wire);
