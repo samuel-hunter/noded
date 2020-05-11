@@ -15,6 +15,17 @@
 #include "noded.h"
 #include "resolve.h"
 
+struct codedict {
+	struct {
+		size_t node_id;
+		uint8_t *code;
+		size_t code_size;
+		size_t port_ids[PROC_PORTS];
+	} *nodes;
+
+	size_t cap;
+	size_t nelems;
+};
 
 static struct {
 	// Source file
@@ -26,6 +37,50 @@ static struct {
 
 // Number of errors before the parser panics.
 static const size_t max_errors = 10;
+
+// Add processor port metadata to a code dictionary which is used for
+// processor cloning.
+static void codedict_add(struct codedict *codedict,
+	size_t node_id, uint8_t *code, size_t code_size, size_t port_ids[])
+{
+	size_t nelem = codedict->nelems;
+
+	if (codedict->cap == codedict->nelems) {
+		if (codedict->cap == 0)
+			codedict->cap = 8;
+		else
+			codedict->cap *= 2;
+
+		codedict->nodes = erealloc(codedict->nodes,
+			codedict->cap*sizeof(*codedict->nodes));
+	}
+
+	codedict->nodes[nelem].node_id = node_id;
+	codedict->nodes[nelem].code = code;
+	codedict->nodes[nelem].code_size = code_size;
+	memcpy(codedict->nodes[nelem].port_ids, port_ids,
+		sizeof(codedict->nodes[nelem].port_ids));
+	codedict->nelems++;
+}
+
+uint8_t *codedict_get(struct codedict *codedict, size_t node_id,
+	size_t *code_size, size_t port_ids[])
+{
+	size_t i;
+	for (i = 0; i < codedict->nelems; i++) {
+		if (node_id == codedict->nodes[i].node_id)
+			goto found;
+	}
+
+	// Nothing found
+	return NULL;
+
+found:
+	*code_size = codedict->nodes[i].code_size;
+	memcpy(port_ids, codedict->nodes[i].port_ids,
+		sizeof(codedict->nodes[i].port_ids));
+	return codedict->nodes[i].code;
+}
 
 void send_error(const struct position *pos, enum error_type type,
 	const char *fmt, ...)
@@ -59,18 +114,21 @@ static bool has_errors(void)
 
 int main(int argc, char **argv)
 {
-	struct symdict dict = {0}; // a zero-value dict is freshly initialized.
-	struct runtime env = {0}; // a zero-value runtime is freshly initialized.
-	struct resolve_ctx rctx = {0}; // ...ditto
+	struct symdict dict = {0}; // a zero-value dict is freshly
+				   // initialized.
+	struct codedict codedict = {0}; // ...ditto
+	struct runtime env = {0};       // ...ditto
+	struct resolve_ctx rctx = {0};  // ...ditto
 	struct parser parser;
 	struct decl *decl;
 	struct node *node;
 	size_t port_ids[PROC_PORTS];
 
+	uint8_t **codearr = NULL;
 	size_t codearr_cap = 0;
 	size_t ncode = 0;
-	uint8_t **codearr = NULL;
-	size_t code_size;
+
+	size_t code_size = 0;
 
 	if (argc != 2) {
 		// Noded requires a file argument
@@ -100,12 +158,33 @@ int main(int argc, char **argv)
 	init_parser(&parser, Globals.f, &dict);
 
 	while (true) {
+		uint8_t *code;
+		size_t node_id;
 		decl = parse_decl(&parser);
 		if (has_errors())
 			return 1;
 
 		switch (decl->type) {
 		case PROC_DECL:
+			// Compile the processor from its declaration
+			code_size = bytecode_size(&decl->data.proc);
+			code = ecalloc(code_size, sizeof(*code));
+			compile(&decl->data.proc, code, port_ids, NULL);
+			if (has_errors())
+				return 1;
+
+			node_id = decl->data.proc.name_id;
+
+			// Add the proc node
+			resolve_add_node(&rctx,
+				add_proc_node(&env, code, code_size),
+				node_id, port_ids);
+
+			// Add the code array to the code dict.
+			codedict_add(&codedict, node_id,
+				code, code_size, port_ids);
+			memset(port_ids, 0, sizeof(port_ids));
+
 			if (codearr_cap == ncode) {
 				if (codearr_cap == 0) {
 					codearr_cap = 8;
@@ -115,21 +194,29 @@ int main(int argc, char **argv)
 				codearr = erealloc(codearr,
 					codearr_cap*sizeof(*codearr));
 			}
+			codearr[ncode++] = code;
+			break;
+		case PROC_COPY_DECL:
+			// Grab the code from a previous declaration.
+			code = codedict_get(&codedict,
+				decl->data.proc_copy.source_id,
+				&code_size, port_ids);
+			if (!code)
+				send_error(&decl->data.proc_copy.source_pos, FATAL,
+					"Undefined node");
 
-			// Compile the processor from its declaration
-			code_size = bytecode_size(&decl->data.proc);
-			codearr[ncode] = ecalloc(code_size, sizeof(*codearr[ncode]));
-			compile(&decl->data.proc, codearr[ncode], port_ids, NULL);
-			if (has_errors())
-				return 1;
+			node_id = decl->data.proc_copy.name_id;
 
-			// Add the proc and io nodes.
+			// Add the proc node
 			resolve_add_node(&rctx,
-				add_proc_node(&env, codearr[ncode], code_size),
-				decl->data.proc.name_id, port_ids);
+				add_proc_node(&env, code, code_size),
+				node_id, port_ids);
 
+			// Add the code array to the code dict, under
+			// a different name.
+			codedict_add(&codedict, node_id,
+				code, code_size, port_ids);
 			memset(port_ids, 0, sizeof(port_ids));
-			ncode++;
 			break;
 		case BUF_DECL:
 			// HACK: the symbols for port_ids *must* match

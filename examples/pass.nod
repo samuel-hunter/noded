@@ -58,15 +58,15 @@ buffer errmsg = "Bad password!\n";
 
 io.in -> check.in;
 check.idx -> password.idx;
-password.chr -> check.pass;
+password.elm -> check.pass;
 check.status -> split.in;
 
 split.ok -> sendok.trigger;
 sendok.idx -> okmsg.idx;
-okmsg.chr -> sendok.msg;
+okmsg.elm -> sendok.msg;
 sendok.out -> io.out;
 
 split.err -> senderr.trigger;
 senderr.idx -> errmsg.idx;
-errmsg.chr -> senderr.msg;
+errmsg.elm -> senderr.msg;
 senderr.out -> io.err;
