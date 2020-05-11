@@ -404,6 +404,16 @@ static bool tick_io_node(void *this)
 	int chr;
 	uint8_t val;
 
+	if (recv(io->out_wire, &val) == PROCESSED) {
+		has_progressed = true;
+		putchar(val);
+	}
+
+	if (recv(io->err_wire, &val) == PROCESSED) {
+		has_progressed = true;
+		putc(val, stderr);
+	}
+
 	if (io->in_wire && !io->eof_reached) {
 		switch (io->in_wire->status) {
 		case HUNGRY: // send element only when requested,
@@ -424,16 +434,6 @@ static bool tick_io_node(void *this)
 		default:
 			break;
 		}
-	}
-
-	if (recv(io->out_wire, &val) == PROCESSED) {
-		has_progressed = true;
-		putchar(val);
-	}
-
-	if (recv(io->err_wire, &val) == PROCESSED) {
-		has_progressed = true;
-		putc(val, stderr);
 	}
 
 	return has_progressed;
