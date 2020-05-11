@@ -119,7 +119,6 @@ enum token {
 
 	BUFFER,
 	PROCESSOR,
-	STACK,
 	keyword_end
 };
 

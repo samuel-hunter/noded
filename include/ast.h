@@ -152,7 +152,7 @@ struct port {
 struct decl {
 	enum decl_type {
 		BAD_DECL, EOF_DECL, PROC_DECL,
-		PROC_COPY_DECL, BUF_DECL, STACK_DECL,
+		PROC_COPY_DECL, BUF_DECL,
 		WIRE_DECL
 	} type;
 	union {
@@ -192,13 +192,6 @@ struct decl {
 			// initialized by the program?
 			size_t len;
 		} buf;
-
-		struct stack_decl {
-			struct position start;
-
-			struct position name_pos;
-			size_t name_id;
-		} stack;
 
 		struct wire_decl {
 			struct port source;

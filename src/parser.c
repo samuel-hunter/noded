@@ -33,7 +33,6 @@ static struct stmt *parse_stmt(struct parser *p);
 
 static struct decl *parse_proc_node_decl(struct parser *p);
 static struct decl *parse_buf_node_decl(struct parser *p);
-static struct decl *parse_stack_node_decl(struct parser *p);
 static struct decl *parse_wire_decl(struct parser *p);
 struct decl *parse_decl(struct parser *p);
 
@@ -922,23 +921,6 @@ static struct decl *parse_buf_node_decl(struct parser *p)
 	return result;
 }
 
-static struct decl *parse_stack_node_decl(struct parser *p)
-{
-	struct fulltoken keyword;
-	struct fulltoken identifier;
-	struct decl *result;
-
-	expect(p, STACK, &keyword);         // stack
-	expect(p, IDENTIFIER, &identifier); // ...
-	expect(p, SEMICOLON, NULL);         // ;
-
-	result = new_decl(STACK_DECL);
-	result->data.stack.start = keyword.pos;
-	result->data.stack.name_pos = identifier.pos;
-	result->data.stack.name_id = sym_id(p->dict, identifier.lit);
-	return result;
-}
-
 static struct decl *parse_wire_decl(struct parser *p)
 {
 	struct decl *result = new_decl(WIRE_DECL);
@@ -962,8 +944,6 @@ struct decl *parse_decl(struct parser *parser)
 		return parse_proc_node_decl(parser);
 	case BUFFER:
 		return parse_buf_node_decl(parser);
-	case STACK:
-		return parse_stack_node_decl(parser);
 	case IDENTIFIER:
 		return parse_wire_decl(parser);
 	default:

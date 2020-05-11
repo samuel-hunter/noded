@@ -41,7 +41,6 @@ static const char *decls[] = {
 	[PROC_DECL]      = "ProcDecl",
 	[PROC_COPY_DECL] = "ProcCopyDecl",
 	[BUF_DECL]       = "BufDecl",
-	[STACK_DECL]     = "StackDecl",
 	[WIRE_DECL]      = "WireDecl"
 };
 

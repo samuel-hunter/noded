@@ -98,8 +98,7 @@ static const char *tokens[] = {
 	[WHILE] = "while",
 
 	[BUFFER] = "buffer",
-	[PROCESSOR] = "processor",
-	[STACK] = "stack",
+	[PROCESSOR] = "processor"
 };
 
 struct {
@@ -120,7 +119,6 @@ struct {
 	{"while", WHILE},
 	{"buffer", BUFFER},
 	{"processor", PROCESSOR},
-	{"stack", STACK},
 	{NULL, ILLEGAL}
 };
 

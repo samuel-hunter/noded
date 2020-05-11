@@ -287,28 +287,6 @@ All buffers have a size of `256` elements, the maximum size of a byte
 plus one. As such, there is no exceptional case where an element
 out-of-bounds is accessed.
 
-### Stack nodes
-
-A stack nodes holds a stack of bytes. It has a single read-write port,
-`%elm`. Writing to `%elm` pushes a byte to the stack, and reading from
-`%elm` pops a byte from the stack, and sends the value over.
-
-If `%elm` is read when the stack is empty, then the stack returns the
-error value `255`. 
-
-A stack must have at least `4096` bytes, but it may be larger. If more
-numbers are pushed to the stack than it can handle, the program should
-prematurely exit with an error code.
-
-The current implementation dynamically allocates memory for each stack
-node, so that it can hold as many bytes as the operating system
-allows it to allocate.
-
-```
-stack_node_decl = "stack" name ";" ;
-name = identifier ;
-```
-
 ### Special Nodes
 
 A Noded implementation may have multiple special nodes so that a
@@ -680,5 +658,5 @@ A complete program consists of a series of node and wire declarations:
 
 ```
 program = { node_decl | wire_decl } ;
-node_decl = processor_node_decl | buffer_node_decl | stack_node_decl ;
+node_decl = processor_node_decl | buffer_node_decl ;
 ```
