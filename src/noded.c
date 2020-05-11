@@ -86,6 +86,7 @@ int main(int argc, char **argv)
 	// vm.h.
 	port_ids[0] = sym_id(&dict, "in");
 	port_ids[1] = sym_id(&dict, "out");
+	port_ids[2] = sym_id(&dict, "err");
 	resolve_add_node(&rctx, node, sym_id(&dict, "io"), port_ids);
 	memset(port_ids, 0, sizeof(port_ids));
 

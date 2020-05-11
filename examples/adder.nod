@@ -29,8 +29,10 @@ processor reader {
 		}
 
 		%out <- 1; // op 1 = Sum them up
+		$unused <- %cont; // Wait until the printer is done to
+				  // continue reading.
 	} else {
-		%out <- 2; // op 2 = User input error
+		%err <- 0; // op 2 = User input error
 		halt;
 	}
 }
@@ -40,31 +42,12 @@ processor adder {
 	$status <- %in;
 	switch ($status) {
 	case 0: // op 0 = Next Number
-		$num <- $in;
+		$num <- %in;
 		$total += $num;
 		break;
 	case 1: // op 1 = Send the result
-		%out <- $status; // Relay opcode
 		%out <- $total;
 		$total = 0;
-		break;
-	case 2: // op 2 = User input error
-		%out <- $status; // Relay opcode
-		// No need to halt; reading from %in will block forever.
-		break;
-	}
-}
-
-// Delegate whether an error or the result should be printed
-processor handler {
-	$status <- %in;
-	switch ($status) {
-	case 1: // op 1 = Print the result
-		$num <- %in;
-		%print <- $num;
-		break;
-	case 2: // op 2 = User input error
-		%err <- 0; // Send signal to error port
 		break;
 	}
 }
@@ -89,6 +72,9 @@ processor printer {
 	$num <- %in;
 	$started = 0;
 
+	%out <- ' '; // small indent to separate from numbers in
+		     // console output.
+
 	// Numbers range from 0 to 255, making our job a little easier
 
 	// Print hundreds digit
@@ -112,19 +98,19 @@ processor printer {
 	$chr = $num + '0';
 	%out <- $chr;
 	%out <- '\n';
+	%cont <- 0; // Tell the reader to continue.
 }
 
 
 // Wiring
 io.in -> reader.in;
 reader.out -> adder.in;
+reader.err -> error.trigger;
+printer.cont -> reader.cont;
 
-adder.out -> handler.in;
-
-handler.err -> error.trigger;
-error.idx -> errormsg.idx;
-errormsg.chr -> error.chr;
-error.out -> io.err;
-
-handler.print -> printer.in;
+adder.out -> printer.in;
 printer.out -> io.out;
+
+error.idx -> errormsg.idx;
+errormsg.elm -> error.in;
+error.out -> io.err;

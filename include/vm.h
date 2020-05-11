@@ -115,6 +115,7 @@ struct node {
 	void *dat;
 };
 
+
 struct node_class {
 	bool (*tick)(void *this);
 	void (*free)(void *this);
@@ -124,7 +125,8 @@ struct node_class {
 enum io_port
 {
 	IO_IN,
-	IO_OUT
+	IO_OUT,
+	IO_ERR
 };
 
 enum buf_port

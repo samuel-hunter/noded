@@ -43,11 +43,10 @@ static void add_wire_to_io_node(void *this, int porti, struct wire *wire);
 
 struct io_node {
 	bool eof_reached;
-	bool has_buf;
-	uint8_t buf;
 
 	struct wire *in_wire;
 	struct wire *out_wire;
+	struct wire *err_wire;
 };
 
 static const struct node_class io_node_class = {
@@ -402,28 +401,27 @@ static bool tick_io_node(void *this)
 {
 	struct io_node *io = this;
 	bool has_progressed = false;
+	int chr;
 	uint8_t val;
 
-	if (io->in_wire && !io->has_buf & !io->eof_reached) {
-		int chr = getchar();
-		if (chr == EOF) {
-			io->eof_reached = true;
-		} else {
-			io->buf = (uint8_t) chr;
-			io->has_buf = true;
-		}
-	}
-
-	if (io->has_buf) {
-		switch (send(io->in_wire, io->buf)) {
-		case BUFFERED:
-			has_progressed = true;
+	if (io->in_wire && !io->eof_reached) {
+		switch (io->in_wire->status) {
+		case HUNGRY: // send element only when requested,
+			     // since getting a character blocks the
+			     // program on this singlethreaded
+			     // implementation.
+			chr = getchar();
+			if (chr == EOF) {
+				io->eof_reached = true;
+			} else {
+				send(io->in_wire, (uint8_t) chr);
+				has_progressed = true;
+			}
 			break;
-		case BLOCKED:
+		case CONSUMED: // acknowledge that the element was consumed
+			io->in_wire->status = EMPTY;
 			break;
-		case PROCESSED:
-			has_progressed = true;
-			io->has_buf = false;
+		default:
 			break;
 		}
 	}
@@ -431,6 +429,11 @@ static bool tick_io_node(void *this)
 	if (recv(io->out_wire, &val) == PROCESSED) {
 		has_progressed = true;
 		putchar(val);
+	}
+
+	if (recv(io->err_wire, &val) == PROCESSED) {
+		has_progressed = true;
+		putc(val, stderr);
 	}
 
 	return has_progressed;
@@ -446,10 +449,14 @@ static bool tick_buf_node(void *this)
 
 	if (buf->elm_wire->owner == this) {
 		switch (buf->elm_wire->status) {
-		case HUNGRY: // send element only when requested
-		case CONSUMED: // acknowledge that the element was consumed
+		case HUNGRY: // send element only when requested,
+			     // since the element could change between
+			     // buffering and processor request.
 			send(buf->elm_wire, buf->data[buf->idx]);
 			has_progressed = true;
+			break;
+		case CONSUMED: // acknowledge that the element was consumed
+			buf->elm_wire->status = EMPTY;
 			break;
 		default:
 			break;
@@ -517,6 +524,9 @@ static void add_wire_to_io_node(void *this, int porti, struct wire *wire)
 		break;
 	case IO_OUT:
 		io->out_wire = wire;
+		break;
+	case IO_ERR:
+		io->err_wire = wire;
 		break;
 	default:
 		assert(false);
