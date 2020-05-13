@@ -6,6 +6,7 @@
  */
 #include <assert.h>
 #include <err.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,11 +43,8 @@ static void free_io_node(void *this);
 static void add_wire_to_io_node(void *this, int porti, struct wire *wire);
 
 struct io_node {
-	bool eof_reached;
-
-	struct wire *in_wire;
-	struct wire *out_wire;
-	struct wire *err_wire;
+	bool reached_eof;
+	bool self_wired;
 };
 
 static const struct node_class io_node_class = {
@@ -56,32 +54,80 @@ static const struct node_class io_node_class = {
 };
 
 
-static bool tick_buf_node(void *this);
 static void free_buf_node(void *this);
 static void add_wire_to_buf_node(void *this, int porti, struct wire *wire);
 
 struct buf_node {
 	uint8_t idx;
-	uint8_t data[BUFFER_NODE_MAX];
-
-	struct wire *idx_wire;
-	struct wire *elm_wire;
+	uint8_t elm[BUFFER_NODE_MAX];
 };
 
 static const struct node_class buf_node_class = {
-	.tick = &tick_buf_node,
+	.tick = NULL,
 	.free = &free_buf_node,
 	.add_wire = &add_wire_to_buf_node
 };
 
+static enum wire_status send_to_proc_wire(void *this, uint8_t dat);
+static enum wire_status recv_from_proc_wire(void *this, uint8_t *dest);
+
+struct proc_wire {
+	enum { EMPTY, FULL, CONSUMED } status;
+	uint8_t buf;
+};
+
+static const struct wire_class proc_wire_class = {
+	.send = &send_to_proc_wire,
+	.recv = &recv_from_proc_wire
+};
+
+static enum wire_status send_to_out_wire(void *this, uint8_t dat);
+
+struct out_wire {
+	FILE *f;
+};
+
+static const struct wire_class out_wire_class = {
+	.send = &send_to_out_wire,
+	.recv = NULL // TODO: Add some error here saying it's invalid?
+		     // It's probably wiser to signal an error at
+		     // compilation time anyways. Let it segfault for
+		     // now, it's easy enough to trace with a
+		     // debugger.
+};
+
+static enum wire_status recv_from_in_wire(void *this, uint8_t *dest);
+
+struct in_wire {
+	bool reached_eof;
+};
+
+static const struct wire_class in_wire_class = {
+	.send = NULL, // TODO: see above with out_wire_class
+	.recv = &recv_from_in_wire
+};
+
+static enum wire_status send_to_buf_wire(void *this, uint8_t dat);
+static enum wire_status recv_from_buf_wire(void *this, uint8_t *dest);
+
+struct buf_wire {
+	bool is_elm; // true = change elm[idx]; false = change idx
+	struct buf_node *node;
+};
+
+static const struct wire_class buf_wire_class = {
+	.send = &send_to_buf_wire,
+	.recv = &recv_from_buf_wire
+};
+
+
 // Send a message through the wire.
-enum wire_status send(struct wire *wire, uint8_t dat)
+static enum wire_status send_to_proc_wire(void *this, uint8_t dat)
 {
-	if (!wire) return BLOCKED;
+	struct proc_wire *wire = this;
 
 	switch (wire->status) {
 	case EMPTY:
-	case HUNGRY:
 		wire->buf = dat;
 		wire->status = FULL;
 		return BUFFERED;
@@ -97,8 +143,9 @@ enum wire_status send(struct wire *wire, uint8_t dat)
 }
 
 // Request a message from the wire.
-enum wire_status recv(struct wire *wire, uint8_t *dest)
+static enum wire_status recv_from_proc_wire(void *this, uint8_t *dest)
 {
+	struct proc_wire *wire = this;
 	if (!wire) return BLOCKED;
 
 	switch (wire->status) {
@@ -107,18 +154,64 @@ enum wire_status recv(struct wire *wire, uint8_t *dest)
 		wire->status = CONSUMED;
 		return PROCESSED;
 	case EMPTY:
-		wire->status = HUNGRY;
-		return BUFFERED; // Nothing got processd, but we did
-				 // send an indicator asking for
-				 // something.
-	case HUNGRY:
-		return BLOCKED;
 	case CONSUMED:
 		return BLOCKED;
 	}
 
 	// Should never be here unless all hell is loose.
 	errx(1, "Internal error: invalid wire status");
+}
+
+static enum wire_status send_to_out_wire(void *this, uint8_t dat)
+{
+	struct out_wire *wire = this;
+	putc(dat, wire->f);
+	return PROCESSED;
+}
+
+static enum wire_status recv_from_in_wire(void *this, uint8_t *dest)
+{
+	struct in_wire *wire = this;
+	int c;
+
+	if (wire->reached_eof) return BLOCKED;
+	c = getchar();
+
+	if (c == EOF) {
+		wire->reached_eof = true;
+		return BLOCKED;
+	}
+
+	*dest = (uint8_t)c;
+	return PROCESSED;
+}
+
+static enum wire_status send_to_buf_wire(void *this, uint8_t dat)
+{
+	struct buf_wire *wire = this;
+	struct buf_node *node = wire->node;
+
+	if (wire->is_elm) {
+		node->elm[node->idx] = dat;
+	} else {
+		node->idx = dat;
+	}
+
+	return PROCESSED;
+}
+
+static enum wire_status recv_from_buf_wire(void *this, uint8_t *dest)
+{
+	struct buf_wire *wire = this;
+	struct buf_node *node = wire->node;
+
+	if (wire->is_elm) {
+		*dest = node->elm[node->idx];
+	} else {
+		*dest = node->idx;
+	}
+
+	return PROCESSED;
 }
 
 // Reserve a place for for the node and return its pointer.
@@ -161,10 +254,9 @@ struct node *add_proc_node(struct runtime *env,
 struct node *add_io_node(struct runtime *env)
 {
 	struct node *node = add_node(env);
-	struct io_node *io = ecalloc(1, sizeof(*io));
 
 	node->class = &io_node_class;
-	node->dat = io;
+	node->dat = ecalloc(1, sizeof(struct io_node));
 
 	return node;
 }
@@ -177,7 +269,7 @@ struct node *add_buf_node(struct runtime *env, const uint8_t data[])
 	node->class = &buf_node_class;
 	node->dat = buf;
 
-	memcpy(buf->data, data, sizeof(buf->data));
+	memcpy(buf->elm, data, sizeof(buf->elm));
 
 	return node;
 }
@@ -353,7 +445,7 @@ static bool tick_proc_node(void *this)
 	case OP_SEND3:
 		wire = proc->wires[instr - OP_SEND0];
 		val1 = pop(proc);
-		switch (send(wire, val1)) {
+		switch (wire->class->send(wire->dat, val1)) {
 		case BUFFERED:
 			push(proc, val1);
 			return true;
@@ -370,7 +462,7 @@ static bool tick_proc_node(void *this)
 	case OP_RECV2:
 	case OP_RECV3:
 		wire = proc->wires[instr - OP_RECV0];
-		switch (recv(wire, &val1)) {
+		switch (wire->class->recv(wire->dat, &val1)) {
 		case BUFFERED:
 			return true;
 		case BLOCKED:
@@ -400,80 +492,27 @@ static bool tick_proc_node(void *this)
 static bool tick_io_node(void *this)
 {
 	struct io_node *io = this;
-	bool has_progressed = false;
-	int chr;
-	uint8_t val;
+	int c;
 
-	if (recv(io->out_wire, &val) == PROCESSED) {
-		has_progressed = true;
-		putchar(val);
+	if (!io->self_wired || io->reached_eof)
+		return false;
+
+	c = getchar();
+	if (c == EOF) {
+		io->reached_eof = true;
+		return false;
 	}
 
-	if (recv(io->err_wire, &val) == PROCESSED) {
-		has_progressed = true;
-		putc(val, stderr);
-	}
-
-	if (io->in_wire && !io->eof_reached) {
-		switch (io->in_wire->status) {
-		case HUNGRY: // send element only when requested,
-			     // since getting a character blocks the
-			     // program on this singlethreaded
-			     // implementation.
-			chr = getchar();
-			if (chr == EOF) {
-				io->eof_reached = true;
-			} else {
-				send(io->in_wire, (uint8_t) chr);
-				has_progressed = true;
-			}
-			break;
-		case CONSUMED: // acknowledge that the element was consumed
-			io->in_wire->status = EMPTY;
-			break;
-		default:
-			break;
-		}
-	}
-
-	return has_progressed;
+	putchar(c);
+	return true;
 }
-
-static bool tick_buf_node(void *this)
-{
-	struct buf_node *buf = this;
-	bool has_progressed = false;
-
-	if (recv(buf->idx_wire, &buf->idx) == PROCESSED)
-		has_progressed = true;
-
-	if (buf->elm_wire->owner == this) {
-		switch (buf->elm_wire->status) {
-		case HUNGRY: // send element only when requested,
-			     // since the element could change between
-			     // buffering and processor request.
-			send(buf->elm_wire, buf->data[buf->idx]);
-			has_progressed = true;
-			break;
-		case CONSUMED: // acknowledge that the element was consumed
-			buf->elm_wire->status = EMPTY;
-			break;
-		default:
-			break;
-		}
-	} else if (buf->elm_wire->owner != this) {
-		if (recv(buf->elm_wire, &buf->data[buf->idx]) == PROCESSED)
-			has_progressed = true;
-	}
-
-	return has_progressed;
-}
-
 
 static bool run_node(struct node *node)
 {
 	bool (*tick)(void *) = node->class->tick;
 	void *dat = node->dat;
+
+	if (!tick) return false;
 
 	// If the first tick made no progress, report accordingly.
 	if (!tick(dat)) return false;
@@ -516,17 +555,16 @@ static void add_wire_to_proc_node(void *this, int porti, struct wire *wire)
 
 static void add_wire_to_io_node(void *this, int porti, struct wire *wire)
 {
-	struct io_node *io = this;
+	(void)this;
 
 	switch (porti) {
 	case IO_IN:
-		io->in_wire = wire;
 		break;
 	case IO_OUT:
-		io->out_wire = wire;
+		((struct out_wire*) wire->dat)->f = stdout;
 		break;
 	case IO_ERR:
-		io->err_wire = wire;
+		((struct out_wire*) wire->dat)->f = stderr;
 		break;
 	default:
 		assert(false);
@@ -536,17 +574,20 @@ static void add_wire_to_io_node(void *this, int porti, struct wire *wire)
 static void add_wire_to_buf_node(void *this, int porti, struct wire *wire)
 {
 	struct buf_node *buf = this;
+	struct buf_wire *buf_wire = wire->dat;
 
 	switch (porti) {
 	case BUF_IDX:
-		buf->idx_wire = wire;
+		buf_wire->is_elm = false;
 		break;
 	case BUF_ELM:
-		buf->elm_wire = wire;
+		buf_wire->is_elm = true;
 		break;
 	default:
 		assert(false);
 	}
+
+	buf_wire->node = buf;
 }
 
 void add_wire(struct runtime *env, struct node *src, int src_porti,
@@ -567,11 +608,28 @@ void add_wire(struct runtime *env, struct node *src, int src_porti,
 	}
 
 	wire = &env->wires[env->nwires++];
-	memset(wire, 0, sizeof(*wire));
+
+	// TODO: This code is extremely messy! Find some way to refactor it!.
+	if (dest->class == &io_node_class) {
+		wire->class = &out_wire_class;
+		wire->dat = ecalloc(1, sizeof(struct out_wire*));
+
+		if (src->class == &io_node_class) {
+			((struct io_node*)dest->dat)->self_wired = true;
+		}
+	} else if (src->class == &io_node_class) {
+		wire->class = &in_wire_class;
+		wire->dat = ecalloc(1, sizeof(struct in_wire*));
+	} else if (dest->class == &buf_node_class || src->class == &buf_node_class) {
+		wire->class = &buf_wire_class;
+		wire->dat = ecalloc(1, sizeof(struct buf_wire*));
+	} else {
+		wire->class = &proc_wire_class;
+		wire->dat = ecalloc(1, sizeof(struct proc_wire*));
+	}
 
 	src->class->add_wire(src->dat, src_porti, wire);
 	dest->class->add_wire(dest->dat, dest_porti, wire);
-	wire->owner = src->dat;
 }
 
 void run(struct runtime *env)
@@ -592,7 +650,8 @@ void clear_runtime(struct runtime *env)
 {
 	for (size_t i = 0; i < env->nnodes; i++) {
 		struct node *node = &env->nodes[i];
-		node->class->free(node->dat);
+		if (node->class->free)
+			node->class->free(node->dat);
 	}
 	free(env->nodes);
 	free(env->wires);

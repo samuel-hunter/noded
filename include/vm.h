@@ -94,32 +94,31 @@ enum opcode {
 	OP_HALT
 };
 
-struct wire {
-	enum { EMPTY, HUNGRY, FULL, CONSUMED } status;
-	uint8_t buf;
-
-	// not about pointer ownership, but rather who sends data
-	// through the wire versus receiving it. Specifically, the
-	// pointer is of `(struct node).dat`.
-	void *owner;
-};
-
 enum wire_status {
 	BUFFERED,
 	BLOCKED,
 	PROCESSED
 };
 
-struct node {
-	const struct node_class *class;
-	void *dat;
+struct wire_class {
+	enum wire_status (*send)(void *this, uint8_t dat);
+	enum wire_status (*recv)(void *this, uint8_t *dest);
 };
 
+struct wire {
+	const struct wire_class *class;
+	void *dat;
+};
 
 struct node_class {
 	bool (*tick)(void *this);
 	void (*free)(void *this);
 	void (*add_wire)(void *this, int porti, struct wire *wire);
+};
+
+struct node {
+	const struct node_class *class;
+	void *dat;
 };
 
 enum io_port
@@ -147,9 +146,6 @@ struct runtime {
 
 
 // vm.c
-
-enum wire_status send(struct wire *wire, uint8_t dat);
-enum wire_status recv(struct wire *wire, uint8_t *dest);
 
 struct node *add_node(struct runtime *env);
 struct node *add_proc_node(struct runtime *env,
