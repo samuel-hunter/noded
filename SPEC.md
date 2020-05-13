@@ -280,11 +280,35 @@ array. `%elm` represents the element of the array that the index is
 pointing to. In C-like terms, accessing `%idx` and `%elm` is like
 accessing the variable `idx` and the expression `buffer[idx]`.
 
-`%idx` and `%elm` can only be conected to one other port.
+`%idx` and `%elm` can be connected to only one port.
 
 All buffers have a size of `256` elements, the maximum size of a byte
 plus one. As such, there is no exceptional case where an element
 out-of-bounds is accessed.
+
+### Stack Nodes
+
+A stack nodes holds a stack of bytes. It has a single read-write port,
+`%elm`. Writing to `%elm` pushes a byte to the stack, and reading from
+`%elm` pops a byte from the stack, and sends the value over.
+
+`%elm` can be connected to only one port.
+
+If `%elm` is read when the stack is empty, then the stack returns the
+error value `255`.
+
+A stack must have at least `1024` bytes, but it may be larger. If more
+numbers are pushed to the stack than it can handle, the runtime should
+prematurely exit with a nonzero error status.
+
+The current implementation dynamically allocates memory for each stack
+node, so that it can hold as many bytes as the operating system
+allows it to allocate.
+
+```
+stack_node_decl = "stack" name ";" ;
+name = identifier ;
+```
 
 ### Special Nodes
 
@@ -306,7 +330,7 @@ will send an EOF value `255` and finally block forever.
 The `%out` port is write-only that sends bytes to a standard output
 stream. `%err` similarly writes to an error output stream.
 
-`%in`, `%out`, and `%err` can only be connected to one other port.
+`%in`, `%out`, and `%err` can only be connected one port each.
 
 This example program capitalizes all letters sent from `%in` and
 relays the processed result to `%out`:
@@ -324,9 +348,11 @@ processor capitalize {
 ## Ports and Wires
 
 Ports are a mechanism that provides inter-node communication via
-sending and receiving values. In a Noded program, node declarations
-specify the ports that each node has, and wire declarations connect
-the ports together.
+sending and receiving values. Wires are bidirectional units of
+communication that two ports use to send messages to each other.
+
+In a Noded program, node declarations specify the ports that each node
+has, and wire declarations connect the ports together.
 
 ```
 (* Within a processor node: *)
@@ -651,11 +677,11 @@ halt_stmt = "halt" ";" ;
 
 When a program starts, all processor nodes begin execution
 concurrently. The program ends when all processor nodes are either
-blocked or halted, i.e. there are no 
+blocked or halted, i.e. there are no nodes able to run any more.
 
 A complete program consists of a series of node and wire declarations:
 
 ```
 program = { node_decl | wire_decl } ;
-node_decl = processor_node_decl | buffer_node_decl ;
+node_decl = processor_node_decl | buffer_node_decl | stack_node_decl ;
 ```
