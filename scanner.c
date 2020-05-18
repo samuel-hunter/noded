@@ -4,7 +4,6 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #include "noded.h"
 
@@ -17,7 +16,6 @@ static const char ident_blacklist[] =
 /* Return whether the symbol is a valid identifier character */
 static bool isident(char c)
 {
-	fprintf(stderr, "%d\n", c);
 	return (c != EOF) && !isspace(c) && !strchr(ident_blacklist, c);
 }
 
@@ -57,6 +55,7 @@ void init_scanner(Scanner *scanner, FILE *f)
 	scanner->pos.lineno = 1;
 
 	next(scanner); /* Populate the rune buffer. */
+	scan(scanner); /* Populate the peek buffer. */
 }
 
 /*
@@ -314,15 +313,23 @@ static Token switch4(Scanner *s, Token tok0, Token tok1,
 }
 
 /*
- * Scan the next token and return its result. Write to dest_literal
- * the literal string, and to pos the token position. Assumes
- * dest_literal has a capacity of LITERAL_MAX+1 bytes. A literal
- * greater than LITERAL_MAX will mark an error in the scanner.
+ * Scan the next token and store it in s->current, for the caller to
+ * read from directly.
  */
-void scan(Scanner *s, FullToken *dest) {
+void scan(Scanner *s) {
+	FullToken *dest = &s->current; /* TODO expand later */
 	Token tok = ILLEGAL;
 	Position start;
-	strcpy(dest->lit, ""); 	/* By default, set the literal empty. */
+
+	if (DEBUG) {
+		/* By default, set the literal empty. */
+		strcpy(dest->lit, "");
+	} else {
+		/* Fill the entire literal with zeroes, so that it's
+		 * easier to read in the debugger. */
+		memset(dest->lit, 0, sizeof(dest->lit));
+	}
+
 scan_again:
 	skip_space(s);
 	start = s->pos;
@@ -482,4 +489,18 @@ scan_again:
 
 	memcpy(&dest->pos, &start, sizeof(dest->pos));
 	dest->tok = tok;
+}
+
+/* If the next token is expected, write to *dest and consume
+ * it. Otherwise, send an error. */
+void expect(Scanner *s, Token expected, FullToken *dest)
+{
+	if (s->current.tok == expected) {
+		if (dest) *dest = s->current;
+		scan(s);
+	} else {
+		send_error(&s->current.pos, ERR, "Expected %s, but received %s",
+			strtoken(expected), strtoken(s->current.tok));
+		return;
+	}
 }
