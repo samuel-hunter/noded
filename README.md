@@ -10,14 +10,20 @@ each other.
 
 This project is maid half as a toy implementation, and half as a
 thought experiment for a concurrent language. Please don't have any
-expectations of it being fast, or accurate, or resilient to breaking
-code.
+expectations of it being fast, or accurate, or cope with invalid code.
 
 ## Progress
 
-All legal code should be fully functioning. The main three areas of
+Legal code should be mostly functioning. The main three areas of
 focus are checking the validity of code (specifically wire connections
 and their direction), optimizing the compiler, and code cleanliness.
+
+This was the first write of the language specification, and
+beforehand, I had zero experience writing a bytecode compiler, or
+interpreting in a VM, or concurrency, or managing multiple processes
+in general. I think I'm happy with how I went on this first write, but
+learning more, I feel that a rewrite would best help reorganize my
+thoughts.
 
 ## Language Specification
 
