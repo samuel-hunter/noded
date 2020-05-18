@@ -1,0 +1,16 @@
+processor こんにちは {
+	%idx <- $i++;
+
+	$mem <- %in;
+	if ($mem == 0)
+		halt;
+
+	%out <- $mem;
+}
+
+buffer message = "こんにちは  你好\n";
+
+
+こんにちは.idx -> message.idx;
+message.elm -> report.in;
+こんにちは.out -> io.out;

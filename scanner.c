@@ -4,8 +4,22 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "noded.h"
+
+// TODO: These are all the characters found in the `scan` switch
+// case. In an effort not to break the Multiple Truths rule, There
+// should be a better way to do this, right?
+static const char ident_blacklist[] =
+	"(){}:,.;$%\\\"+-!~*/<>=&^|?";
+
+/* Return whether the symbol is a valid identifier character */
+static bool isident(char c)
+{
+	fprintf(stderr, "%d\n", c);
+	return (c != EOF) && !isspace(c) && !strchr(ident_blacklist, c);
+}
 
 /* Populate the next character in the scanner. */
 static void next(Scanner *s)
@@ -97,7 +111,7 @@ static bool skip_comment(Scanner *s)
 static void scan_identifier(Scanner *s, char *dest)
 {
 	size_t len = 0;
-	while (isalnum(s->chr)) {
+	while (isident(s->chr)) {
 		len++;
 		if (len > LITERAL_MAX) {
 			send_error(&s->pos, ERR, "Identifier too large");
@@ -312,12 +326,13 @@ void scan(Scanner *s, FullToken *dest) {
 scan_again:
 	skip_space(s);
 	start = s->pos;
-	if (isalpha(s->chr)) {
-		scan_identifier(s, dest->lit);
-		tok = lookup(dest->lit);
-	} else if (isdigit(s->chr)) {
+
+	if (isdigit(s->chr)) {
 		scan_number(s, dest->lit);
 		tok = NUMBER;
+	} else if (isident(s->chr)) {
+		scan_identifier(s, dest->lit);
+		tok = lookup(dest->lit);
 	} else {
 		/*
 		 * The order of the keys in this switch should roughly
