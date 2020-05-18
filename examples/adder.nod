@@ -40,15 +40,14 @@ processor reader {
 // Accumulate all numbers and send them off
 processor adder {
 	$status <- %in;
-	switch ($status) {
-	case 0: // op 0 = Next Number
+        if ($status == 0) {
+		// op 0 = Next Number
 		$num <- %in;
 		$total += $num;
-		break;
-	case 1: // op 1 = Send the result
+	} else if ($status == 1) {
+		// op 1 = Send the result
 		%out <- $total;
 		$total = 0;
-		break;
 	}
 }
 

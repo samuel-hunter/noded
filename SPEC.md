@@ -509,7 +509,7 @@ Statements determine execution.
 
 ```
 stmt = empty_stmt | expr_stmt | send_stmt | block_stmt |
-       if_stmt | switch_stmt | while_stmt | for_stmt |
+       if_stmt | while_stmt | for_stmt |
        labeled_stmt | branch_stmt | halt_stmt ;
 ```
 
@@ -577,27 +577,6 @@ if (1) then {
         %out <- 2;
     }
 }
-```
-
-### Switch Statements
-
-A switch statement provides a multi-way tree of execution. It takes a
-single expression, and then matches it to multiple cases of
-constant expressions. 
-
-If a matching case key is found, then execution continues at the start
-of the case label. If there is no matching case key, but there is a
-default label, then execution continues at the default label
-instead. Otherwise, execution skips the switch body.
-
-```
-switch_stmt = "switch" "(" tag ")" "{" { case_clause } 
-                                        [ default_clause ] "}" ;
-case_clause = "case" key ":" { stmt } ;
-default_clause = "default" ":" { stmt } ;
-
-tag = expr ;
-key = const_expr ;
 ```
 
 ### (Do-)While Statements
