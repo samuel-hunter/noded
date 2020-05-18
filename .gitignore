@@ -1,12 +1,7 @@
 # object files
 *.o
 
-# Generated files
-Makefile
-build.make
-
 # binaries
+/nodedc
+/nodeddump
 /noded
-/disasm
-/compile
-/test-*

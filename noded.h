@@ -8,22 +8,32 @@
 #include <stdio.h>   // FILE
 
 // Precedence-based binary operator scanning.
-#define NON_OPERATOR   -1
-#define LOWEST_PREC     0
-#define HIGHEST_BINARY 13
-#define HIGHEST_PREC   15
-
-enum error_type { WARN, ERR, FATAL };
-
-// Note: LITERAL_MAX is calculated by multiplying the buffer size with
-// the longest escape sequence for a string (\x##, or \###). This is
-// the longest literal size that any program would reasonably need.
-enum {
-	BUFFER_NODE_MAX = UINT8_MAX+1,
-	LITERAL_MAX = BUFFER_NODE_MAX*4 // Max byte size for a literal.
+enum
+{
+	NON_OPERATOR   = -1,
+	LOWEST_PREC    =  0,
+	HIGHEST_BINARY = 13,
+	HIGHEST_PREC   = 15,
 };
 
-enum token {
+typedef enum {
+	WARN,
+	ERR,
+	FATAL,
+} ErrorType;
+
+/*
+ * Note: LITERAL_MAX is calculated by multiplying the buffer size with
+ * the longest escape sequence for a string (\x##, or \###). This is
+ * the longest literal size that any program would reasonably need.
+ */
+enum {
+	BUFFER_NODE_MAX = UINT8_MAX+1,
+	LITERAL_MAX = BUFFER_NODE_MAX*4, /* Max byte size for a literal.  */
+};
+
+typedef enum
+{
 	ILLEGAL,
 	TOK_EOF,
 
@@ -120,21 +130,23 @@ enum token {
 	BUFFER,
 	PROCESSOR,
 	keyword_end
-};
+} Token;
 
-
-struct position {
+typedef struct Position Position;
+struct Position {
 	int lineno; // 1-based
 	int colno; // 0-based
 };
 
-struct fulltoken {
-	enum token tok;
+typedef struct FullToken FullToken;
+struct FullToken {
+	Token tok;
 	char lit[LITERAL_MAX+1];
-	struct position pos;
+	Position pos;
 };
 
-struct scanner {
+typedef struct Scanner Scanner;
+struct Scanner {
 	// The file it reads, and a buffer to store some state.
 	FILE *f; // Not owned by the scanner.
 	char buf[512];
@@ -142,15 +154,15 @@ struct scanner {
 	size_t nread;
 
 	char chr;      // Current character
-	struct position pos;
+	Position pos;
 };
 
-// err.c
-
-void vprint_error(const char *srcname, FILE *f, const struct position *pos,
-	enum error_type type, const char *fmt, va_list ap);
-void send_error(const struct position *pos, enum error_type type,
-	const char *fmt, ...);
+typedef struct SymDict SymDict;
+struct SymDict {
+	char **syms;
+	size_t len;
+	size_t cap;
+};
 
 
 // alloc.c
@@ -159,23 +171,37 @@ void *ecalloc(size_t nmemb, size_t size);
 void *erealloc(void *ptr, size_t size);
 
 
-// token.c
+// dict.c
 
-enum token lookup(char ident[]);
-int precedence(enum token op);
-bool isltr(enum token op);
-bool isliteral(enum token tok);
-bool isoperator(enum token tok);
-bool iskeyword(enum token tok);
-bool isoperand(enum token tok);
-bool isunary(enum token tok);
-bool issuffix(enum token tok);
-const char *strtoken(enum token tok);
+size_t sym_id(SymDict *dict, const char *sym);
+const char *id_sym(const SymDict *dict, size_t id);
+void clear_dict(SymDict *dict);
+
+
+// err.c
+
+void vprint_error(const char *srcname, FILE *f,
+	const Position *pos, ErrorType type, const char *fmt, va_list ap);
+void send_error(const Position *pos, ErrorType type, const char *fmt, ...);
 
 
 // scanner.c
 
-void init_scanner(struct scanner *scanner, FILE *f);
-void scan(struct scanner *scanner, struct fulltoken *dest);
+void init_scanner(Scanner *scanner, FILE *f);
+void scan(Scanner *scanner, FullToken *dest);
+
+
+// token.c
+
+Token lookup(char ident[]);
+int precedence(Token op);
+bool isltr(Token op);
+bool isliteral(Token tok);
+bool isoperator(Token tok);
+bool iskeyword(Token tok);
+bool isoperand(Token tok);
+bool isunary(Token tok);
+bool issuffix(Token tok);
+const char *strtoken(Token tok);
 
 #endif /* NODED_H */

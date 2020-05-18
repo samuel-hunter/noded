@@ -51,7 +51,7 @@ void *erealloc(void *ptr, size_t size)
 {
 	void *result;
 
-	// realloc() has a similar wart to calloc().
+	/* realloc() has a similar wart to calloc(). */
 	if (!size) {
 		free(ptr);
 		return NULL;

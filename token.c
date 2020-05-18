@@ -9,7 +9,7 @@
 
 #include "noded.h"
 
-// Should be in the same exact order as enum tokens.
+// Should be in the same exact order as Tokens.
 static const char *tokens[] = {
 	[ILLEGAL] = "ILLEGAL",
 	[TOK_EOF] = "EOF",
@@ -103,7 +103,7 @@ static const char *tokens[] = {
 
 struct {
 	const char *literal;
-	enum token tok;
+	Token tok;
 } keywords[] = {
 	{"break", BREAK},
 	{"case", CASE},
@@ -124,7 +124,7 @@ struct {
 
 // map an identifier to its keyword token or IDENTIFIER if not a
 // keyword.
-enum token lookup(char ident[])
+Token lookup(char ident[])
 {
 	for (size_t i = 0; keywords[i].literal != NULL; i++) {
 		if (strcmp(keywords[i].literal, ident) == 0)
@@ -137,7 +137,7 @@ enum token lookup(char ident[])
 // All information regarding precedence and associativity is found in
 // SPEC.md, section `EXPRESSIONS'.
 
-int precedence(enum token op)
+int precedence(Token op)
 {
 	switch (op) {
 	case MUL:
@@ -192,7 +192,7 @@ int precedence(enum token op)
 }
 
 // Return whether the associativity is left-to-right.
-bool isltr(enum token op)
+bool isltr(Token op)
 {
 	switch (precedence(op)) {
 	case 14: // Prefixes
@@ -205,11 +205,11 @@ bool isltr(enum token op)
 }
 
 // Predicates
-bool isliteral(enum token tok) { return literal_beg < tok && tok < literal_end; }
-bool isoperator(enum token tok) { return operator_beg < tok && tok < operator_end; }
-bool iskeyword(enum token tok) { return keyword_beg < tok && tok < keyword_end; }
+bool isliteral(Token tok) { return literal_beg < tok && tok < literal_end; }
+bool isoperator(Token tok) { return operator_beg < tok && tok < operator_end; }
+bool iskeyword(Token tok) { return keyword_beg < tok && tok < keyword_end; }
 
-bool isoperand(enum token tok)
+bool isoperand(Token tok)
 {
 	switch (tok) {
 	case NUMBER:
@@ -223,7 +223,7 @@ bool isoperand(enum token tok)
 	}
 }
 
-bool isunary(enum token tok)
+bool isunary(Token tok)
 {
 	switch (tok) {
 	case INC:
@@ -236,11 +236,11 @@ bool isunary(enum token tok)
 	}
 }
 
-bool issuffix(enum token tok) {
+bool issuffix(Token tok) {
 	return tok == INC || tok == DEC;
 }
 
-const char *strtoken(enum token tok)
+const char *strtoken(Token tok)
 {
 	return tokens[tok];
 }

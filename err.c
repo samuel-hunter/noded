@@ -11,7 +11,6 @@
  * in their own way, e.g. the tests can immediately exit on the first
  * error.
  */
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,12 +18,11 @@
 #include "noded.h"
 
 #define RESET "\033[0m"
-#define BOLD "\033[1m"
-#define RED "\033[31m"
+#define BOLD  "\033[1m"
+#define RED   "\033[31m"
 
-
-void vprint_error(const char *srcname, FILE *f, const struct position *pos,
-	enum error_type type, const char *fmt, va_list ap)
+void vprint_error(const char *srcname, FILE *f, const Position *pos,
+	ErrorType type, const char *fmt, va_list ap)
 {
 	const char *typestr = NULL;
 	char *lineptr = NULL;

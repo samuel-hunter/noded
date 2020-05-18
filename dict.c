@@ -12,19 +12,20 @@
 #include <string.h>
 
 #include "noded.h"
-#include "dict.h"
 
-static void init(struct symdict *dict)
+static void init(SymDict *dict)
 {
 	dict->cap = 8;
 	dict->syms = ecalloc(dict->cap, sizeof(*dict->syms));
 
-	// Enforce an empty string as id #0 so that it is unreachable
-	// from comparing valid identifiers.
+	/*
+	 * Enforce an empty string as id #0 so that it is unreachable
+	 * from comparing valid identifiers.
+         */
 	sym_id(dict, "");
 }
 
-size_t sym_id(struct symdict *dict, const char *sym)
+size_t sym_id(SymDict *dict, const char *sym)
 {
 	if (dict->cap == 0)
 		init(dict);
@@ -34,7 +35,7 @@ size_t sym_id(struct symdict *dict, const char *sym)
 			return i;
 	}
 
-	// No strings matched; add a new one to the array.
+	/* No strings matched; add a new one to the array. */
 	if (dict->len == dict->cap) {
 		dict->cap *= 2;
 		dict->syms = erealloc(dict->syms,
@@ -47,13 +48,13 @@ size_t sym_id(struct symdict *dict, const char *sym)
 	return result;
 }
 
-const char *id_sym(const struct symdict *dict, size_t id)
+const char *id_sym(const SymDict *dict, size_t id)
 {
 	if (id >= dict->len) return NULL;
 	return dict->syms[id];
 }
 
-void clear_dict(struct symdict *dict)
+void clear_dict(SymDict *dict)
 {
 	for (size_t i = 0; i < dict->len; i++) {
 		free(dict->syms[i]);

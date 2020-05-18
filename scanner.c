@@ -7,10 +7,10 @@
 
 #include "noded.h"
 
-// Populate the next character in the scanner.
-static void next(struct scanner *s)
+/* Populate the next character in the scanner. */
+static void next(Scanner *s)
 {
-	// Update linenumber based on current character.
+	/* Update linenumber based on current character. */
 	if (s->chr == '\n') {
 		s->pos.lineno++;
 		s->pos.colno = 0;
@@ -18,15 +18,17 @@ static void next(struct scanner *s)
 		s->pos.colno++;
 	}
 
-	// Refresh the buffer when required.
+	/* Refresh the buffer when required. */
 	if (s->offset == s->nread && !(feof(s->f) || ferror(s->f))) {
 		s->offset = 0;
 		s->nread = fread(s->buf, 1, sizeof(s->buf), s->f);
-		// If an I/O error happens, we can pretend it's the
-		// same as feof and return an EOF character.
+		/*
+		 * If an I/O error happens, we can pretend it's the
+		 * same as feof and return an EOF character.
+		 */
 	}
 
-	// Replace next character.
+	/* Replace next character. */
 	if (s->offset == s->nread) {
 		s->chr = EOF;
 	} else {
@@ -34,47 +36,51 @@ static void next(struct scanner *s)
 	}
 }
 
-void init_scanner(struct scanner *scanner, FILE *f)
+void init_scanner(Scanner *scanner, FILE *f)
 {
 	memset(scanner, 0, sizeof(*scanner));
 	scanner->f = f;
 	scanner->pos.lineno = 1;
 
-	next(scanner); // populate rune buffer.
+	next(scanner); /* Populate the rune buffer. */
 }
 
-// Skip through the source code until it reaches a non-space character
-// or EOF.
-static void skip_space(struct scanner *s)
+/*
+ * Skip through the source code until it reaches a non-space character
+ * or EOF.
+ */
+static void skip_space(Scanner *s)
 {
 	while (isspace(s->chr) && s->chr != EOF)
 		next(s);
 }
 
-// Skip through the source code if it is at a comment. Return
-// whether it skipped a comment.
-static bool skip_comment(struct scanner *s)
+/*
+ * Skip through the source code if it is at a comment. Return
+ * whether it skipped a comment.
+ */
+static bool skip_comment(Scanner *s)
 {
 	switch (s->chr) {
 	case '/':
-		// Single-lined comment
+		/* Single-lined comment */
 		while (s->chr != '\n' && s->chr != EOF) {
 			next(s);
 		}
-		next(s); // Advance past newline
+		next(s); /* Advance past newline */
 		return true;
 	case '*':
-		// Multi-lined comment
-		next(s); // skip the '*'
+		/* Multi-lined comment */
+		next(s); /* skip the '*' */
 
 		while (s->chr != '/' && s->chr != EOF) {
-			// Advance to the next '*'
+			/* Advance to the next '*' */
 			while (s->chr != '*' && s->chr != EOF) {
 				next(s);
 			}
 			next(s);
 		}
-		// Consume the ending '/'
+		/* Consume the ending '/' */
 		next(s);
 
 		return true;
@@ -83,10 +89,12 @@ static bool skip_comment(struct scanner *s)
 	return false;
 }
 
-// Scan an identifier and write to `dest`. Assumes `dest` can hold
-// LITERAL_MAX+1 bytes. If the length of the identifier is beyond
-// LITERAL_MAX, mark s.err.
-static void scan_identifier(struct scanner *s, char *dest)
+/*
+ * Scan an identifier and write to `dest`. Assumes `dest` can hold
+ * LITERAL_MAX+1 bytes. If the length of the identifier is beyond
+ * LITERAL_MAX, mark s.err.
+ */
+static void scan_identifier(Scanner *s, char *dest)
 {
 	size_t len = 0;
 	while (isalnum(s->chr)) {
@@ -101,34 +109,38 @@ static void scan_identifier(struct scanner *s, char *dest)
 	}
 
 exit:
-	*dest = '\0'; // Terminate with null character.
+	*dest = '\0'; /* Terminate with null character. */
 }
 
-// Scan a number and write to `dest`. Assumes `dest` can hold
-// LITERAL_MAX+1 bytes. If the length of the literal is beyond LITERAL_MAX,
-// mark s.err.
-static void scan_number(struct scanner *s, char *dest)
+/*
+ * Scan a number and write to `dest`. Assumes `dest` can hold
+ * LITERAL_MAX+1 bytes. If the length of the literal is beyond LITERAL_MAX,
+ * mark s.err.
+ */
+static void scan_number(Scanner *s, char *dest)
 {
 	size_t len = 0;
 	int base = 10;
 
-	// Scan the optional `0[bBoOxX]?` header. Don't check for len
-	// here, since LITERAL_MAX > 2.
+	/*
+	 * Scan the optional `0[bBoOxX]?` header. Don't check for len
+	 * here, since LITERAL_MAX > 2.
+	 */
 	if (s->chr == '0') {
-		base = 8; // O### numbers are octal.
+		base = 8; /* O### numbers are octal. */
 		len++;
 		*dest++ = s->chr;
 		next(s);
 
 		switch (s->chr) {
-		case 'b': // 0b####
+		case 'b': /* 0b#### */
 		case 'B':
 			base = 2;
 			len++;
 			*dest++ = s->chr;
 			next(s);
 			break;
-		case 'o': // 0o####
+		case 'o': /* 0o#### */
 		case 'O':
 			base = 8;
 			*dest++ = s->chr;
@@ -145,7 +157,7 @@ static void scan_number(struct scanner *s, char *dest)
 
 	while (true) {
 		if (s->chr >= '0' && s->chr <= '1') {
-			// do nothing, always a valid digit :)
+			/* do nothing, always a valid digit :) */
 		} else if (s->chr >= '2' && s->chr <= '7') {
 			if (base < 8)
 				goto exit;
@@ -174,21 +186,23 @@ exit:
 	*dest = '\0';
 }
 
-// Scan a string and write the literal to `dest`, excluding the
-// quotes. Assumes `dest` has the length LITERAL_MAX+1. If the literal
-// is greater than LITERAL_MAX, populate s.err.
-static void scan_string(struct scanner *s, char *dest)
+/*
+ * Scan a string and write the literal to `dest`, excluding the
+ * quotes. Assumes `dest` has the length LITERAL_MAX+1. If the literal
+ * is greater than LITERAL_MAX, populate s.err.
+ */
+static void scan_string(Scanner *s, char *dest)
 {
 	size_t len = 0;
 	bool escaped = false;
 
-	next(s); // Consume starting "
+	next(s); /* Consume starting " */
 	while (true) {
 		if (s->chr == '\\') {
 			escaped = !escaped;
 		} else if (s->chr == '"' && !escaped) {
-			next(s); // Advance past ending "
-			*dest = '\0'; // Terminate string literal
+			next(s); /* Advance past ending " */
+			*dest = '\0'; /* Terminate string literal */
 
 			return;
 		} else {
@@ -205,22 +219,24 @@ static void scan_string(struct scanner *s, char *dest)
 	}
 }
 
-// Scan a char and write the literal to `dest`, skipping the
-// ampersands. Assumes `dest` has the length LITERAL_MAX+1. If the
-// litearl is greater than LITERAL_MAX, mark the error.
-static void scan_char(struct scanner *s, char *dest)
+/*
+ * Scan a char and write the literal to `dest`, skipping the
+ * ampersands. Assumes `dest` has the length LITERAL_MAX+1. If the
+ * literal is greater than LITERAL_MAX, mark the error.
+ */
+static void scan_char(Scanner *s, char *dest)
 {
 	size_t len = 0;
 	bool escaped = false;
 
-	next(s); // Consume starting '
+	next(s); /* Consume starting ' */
 
 	while (true) {
 		if (s->chr == '\\') {
 			escaped = !escaped;
 		} else if (s->chr == '\'' && !escaped) {
-			next(s); // Advance past ending '
-			*dest = '\0'; // Terminate end of string
+			next(s); /* Advance past ending ' */
+			*dest = '\0'; /* Terminate end of string */
 
 			return;
 		} else {
@@ -237,9 +253,9 @@ static void scan_char(struct scanner *s, char *dest)
 	}
 }
 
-// Helper functions for scanning multi-byte tokens such as >> += >>= .
+/* Helper functions for scanning multi-byte tokens such as >> += >>= . */
 
-static enum token switch2(struct scanner *s, enum token tok0, enum token tok1)
+static Token switch2(Scanner *s, Token tok0, Token tok1)
 {
 	if (s->chr == '=') {
 		next(s);
@@ -249,8 +265,8 @@ static enum token switch2(struct scanner *s, enum token tok0, enum token tok1)
 	return tok0;
 }
 
-static enum token switch3(struct scanner *s, enum token tok0, enum token tok1,
-	char chr2, enum token tok2)
+static Token switch3(Scanner *s, Token tok0, Token tok1,
+	char chr2, Token tok2)
 {
 
 	if (s->chr == '=') {
@@ -264,8 +280,8 @@ static enum token switch3(struct scanner *s, enum token tok0, enum token tok1,
 	return tok0;
 }
 
-static enum token switch4(struct scanner *s, enum token tok0, enum token tok1,
-	char chr2, enum token tok2, enum token tok3)
+static Token switch4(Scanner *s, Token tok0, Token tok1,
+	char chr2, Token tok2, Token tok3)
 {
 	if (s->chr == '=') {
 		next(s);
@@ -283,15 +299,16 @@ static enum token switch4(struct scanner *s, enum token tok0, enum token tok1,
 	return tok0;
 }
 
-// Scan the next token and return its result. Write to dest_literal
-// the literal string, and to pos the token position. Assumes
-// dest_literal has a capacity of LITERAL_MAX+1 bytes. A literal
-// greater than LITERAL_MAX will mark an error in the scanner.
-void scan(struct scanner *s, struct fulltoken *dest) {
-	enum token tok = ILLEGAL;
-	struct position start;
-	// By default, set the literal empty.
-	strcpy(dest->lit, "");
+/*
+ * Scan the next token and return its result. Write to dest_literal
+ * the literal string, and to pos the token position. Assumes
+ * dest_literal has a capacity of LITERAL_MAX+1 bytes. A literal
+ * greater than LITERAL_MAX will mark an error in the scanner.
+ */
+void scan(Scanner *s, FullToken *dest) {
+	Token tok = ILLEGAL;
+	Position start;
+	strcpy(dest->lit, ""); 	/* By default, set the literal empty. */
 scan_again:
 	skip_space(s);
 	start = s->pos;
@@ -302,53 +319,57 @@ scan_again:
 		scan_number(s, dest->lit);
 		tok = NUMBER;
 	} else {
-		// The order of the keys in this switch should roughly
-		// be in the same order as how the token constants are
-		// declared.
+		/*
+		 * The order of the keys in this switch should roughly
+		 * be in the same order as how the token constants are
+		 * declared.
+		 */
 		switch (s->chr) {
 		case '(':
-			next(s); // consume (
+			next(s); /* consume ( */
 			tok = LPAREN;
 			break;
 		case ')':
-			next(s); // consume )
+			next(s); /* consume ) */
 			tok = RPAREN;
 			break;
 		case '{':
-			next(s); // consume {
+			next(s); /* consume { */
 			tok = LBRACE;
 			break;
 		case '}':
-			next(s); // consume }
+			next(s); /* consume } */
 			tok = RBRACE;
 			break;
 		case ':':
-			next(s); // consume :
+			next(s); /* consume : */
 			tok = COLON;
 			break;
 		case ',':
-			next(s); // consume ,
+			next(s); /* consume , */
 			tok = COMMA;
 			break;
 		case '.':
-			next(s); // consume .
+			next(s); /* consume . */
 			tok = PERIOD;
 			break;
 		case ';':
-			next(s); // consume ;
+			next(s); /* consume ; */
 			tok = SEMICOLON;
 			break;
 		case '$':
-			next(s); // consume $
+			next(s); /* consume $ */
 			scan_identifier(s, dest->lit);
 			tok = VARIABLE;
 			break;
 		case '%':
-			next(s); // consume %
+			next(s); /* consume % */
 			if (isalpha(s->chr)) {
 				tok = PORT;
-				// The '%' will be truncated in the
-				// literal value.
+				/*
+				 * The '%' will be truncated in the
+				 * literal value.
+				 */
 				scan_identifier(s, dest->lit);
 			} else {
 				tok = switch2(s, MOD, MOD_ASSIGN);
@@ -436,7 +457,7 @@ scan_again:
 			tok = ILLEGAL;
 			dest->lit[0] = s->chr;
 			dest->lit[1] = '\0';
-			next(s); // Always advance.
+			next(s); /* Always advance. */
 		}
 	}
 
