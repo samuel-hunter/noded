@@ -500,7 +500,7 @@ void expect(Scanner *s, Token expected, FullToken *dest)
 		scan(s);
 	} else {
 		send_error(&s->current.pos, ERR, "Expected %s, but received %s",
-			strtoken(expected), strtoken(s->current.tok));
+			tokstr(expected), tokstr(s->current.tok));
 		return;
 	}
 }

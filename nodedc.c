@@ -70,7 +70,7 @@ static void report_processor(Scanner *s)
 		break;
 	default:
 		send_error(&s->current.pos, ERR, "Unexpected token %s",
-			strtoken(s->current.tok));
+			tokstr(s->current.tok));
 	}
 }
 
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
 			break;
 		default:
 			send_error(&s.current.pos, ERR,
-				"Unexpected token %s", strtoken(s.current.tok));
+				"Unexpected token %s", tokstr(s.current.tok));
 			break;
 		}
 	} while (s.current.tok != TOK_EOF);
