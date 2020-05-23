@@ -113,7 +113,7 @@ typedef enum
 	PROCESSOR,
 	STACK,
 	keyword_end,
-} Token;
+} TokenType;
 
 typedef struct Position Position;
 struct Position {
@@ -121,9 +121,9 @@ struct Position {
 	int colno; /* 0-based */
 };
 
-typedef struct FullToken FullToken;
-struct FullToken {
-	Token tok;
+typedef struct Token Token;
+struct Token {
+	TokenType type;
 	char lit[LITERAL_MAX+1];
 	Position pos;
 };
@@ -140,7 +140,7 @@ struct Scanner {
 	Position pos;
 
 	/* Peek buffer */
-	FullToken current;
+	Token current;
 };
 
 typedef struct SymDict SymDict;
@@ -180,13 +180,13 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...);
 
 void init_scanner(Scanner *scanner, FILE *f);
 void scan(Scanner *scanner);
-void expect(Scanner *scanner, Token expected, FullToken *dest);
+void expect(Scanner *scanner, TokenType expected, Token *dest);
 
 
 /* token.c */
 
-Token lookup(char ident[]);
-const char *tokstr(Token tok);
+TokenType lookup(char ident[]);
+const char *tokstr(TokenType type);
 
 
 #endif /* NODED_H */

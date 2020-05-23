@@ -268,7 +268,7 @@ static void scan_char(Scanner *s, char *dest)
 
 /* Helper functions for scanning multi-byte tokens such as >> += >>= . */
 
-static Token switch2(Scanner *s, Token tok0, Token tok1)
+static TokenType switch2(Scanner *s, TokenType tok0, TokenType tok1)
 {
 	if (s->chr == '=') {
 		next(s);
@@ -278,8 +278,8 @@ static Token switch2(Scanner *s, Token tok0, Token tok1)
 	return tok0;
 }
 
-static Token switch3(Scanner *s, Token tok0, Token tok1,
-	char chr2, Token tok2)
+static TokenType switch3(Scanner *s, TokenType tok0, TokenType tok1,
+	char chr2, TokenType tok2)
 {
 
 	if (s->chr == '=') {
@@ -293,8 +293,8 @@ static Token switch3(Scanner *s, Token tok0, Token tok1,
 	return tok0;
 }
 
-static Token switch4(Scanner *s, Token tok0, Token tok1,
-	char chr2, Token tok2, Token tok3)
+static TokenType switch4(Scanner *s, TokenType tok0, TokenType tok1,
+	char chr2, TokenType tok2, TokenType tok3)
 {
 	if (s->chr == '=') {
 		next(s);
@@ -317,8 +317,8 @@ static Token switch4(Scanner *s, Token tok0, Token tok1,
  * read from directly.
  */
 void scan(Scanner *s) {
-	FullToken *dest = &s->current; /* TODO expand later */
-	Token tok = ILLEGAL;
+	Token *dest = &s->current; /* TODO expand later */
+	TokenType type = ILLEGAL;
 	Position start;
 
 	if (DEBUG) {
@@ -336,99 +336,99 @@ scan_again:
 
 	if (isdigit(s->chr)) {
 		scan_number(s, dest->lit);
-		tok = NUMBER;
+		type = NUMBER;
 	} else if (isident(s->chr)) {
 		scan_identifier(s, dest->lit);
-		tok = lookup(dest->lit);
+		type = lookup(dest->lit);
 	} else {
 		/*
 		 * The order of the keys in this switch should roughly
-		 * be in the same order as how the token constants are
+		 * be in the same order as how the typeen constants are
 		 * declared.
 		 */
 		switch (s->chr) {
 		case '(':
 			next(s); /* consume ( */
-			tok = LPAREN;
+			type = LPAREN;
 			break;
 		case ')':
 			next(s); /* consume ) */
-			tok = RPAREN;
+			type = RPAREN;
 			break;
 		case '{':
 			next(s); /* consume { */
-			tok = LBRACE;
+			type = LBRACE;
 			break;
 		case '}':
 			next(s); /* consume } */
-			tok = RBRACE;
+			type = RBRACE;
 			break;
 		case ':':
 			next(s); /* consume : */
-			tok = COLON;
+			type = COLON;
 			break;
 		case ',':
 			next(s); /* consume , */
-			tok = COMMA;
+			type = COMMA;
 			break;
 		case '.':
 			next(s); /* consume . */
-			tok = PERIOD;
+			type = PERIOD;
 			break;
 		case ';':
 			next(s); /* consume ; */
-			tok = SEMICOLON;
+			type = SEMICOLON;
 			break;
 		case '$':
 			next(s); /* consume $ */
 			scan_identifier(s, dest->lit);
-			tok = VARIABLE;
+			type = VARIABLE;
 			break;
 		case '%':
 			next(s); /* consume % */
 			if (isalpha(s->chr)) {
-				tok = PORT;
+				type = PORT;
 				/*
 				 * The '%' will be truncated in the
 				 * literal value.
 				 */
 				scan_identifier(s, dest->lit);
 			} else {
-				tok = switch2(s, MOD, MOD_ASSIGN);
+				type = switch2(s, MOD, MOD_ASSIGN);
 			}
 			break;
 		case '\'':
-			tok = CHAR;
+			type = CHAR;
 			scan_char(s, dest->lit);
 			break;
 		case '"':
-			tok = STRING_LITERAL;
+			type = STRING_LITERAL;
 			scan_string(s, dest->lit);
 			break;
 		case '+':
 			next(s);
-			tok = switch3(s, ADD, ADD_ASSIGN, '+', INC);
+			type = switch3(s, ADD, ADD_ASSIGN, '+', INC);
 			break;
 		case '-':
 			next(s);
 			if (s->chr == '>') {
 				next(s);
-				tok = WIRE;
+				type = WIRE;
 			} else {
-				tok = switch3(s, SUB, SUB_ASSIGN, '-', DEC);
+				type = switch3(s, SUB, SUB_ASSIGN, '-', DEC);
 			}
 			break;
 		case '!':
 			next(s);
-			tok = switch2(s, LNOT, NEQ);
+			type = switch2(s, LNOT, NEQ);
 			break;
 		case '~':
 			next(s);
-			tok = NOT;
+			type = NOT;
 			break;
 		case '*':
 			next(s);
-			tok = switch2(s, MUL, MUL_ASSIGN);
+			type = switch2(s, MUL, MUL_ASSIGN);
 			break;
 		case '/':
 			next(s);
@@ -436,71 +436,71 @@ scan_again:
 				goto scan_again;
 			}
 
-			tok = switch2(s, DIV, DIV_ASSIGN);
+			type = switch2(s, DIV, DIV_ASSIGN);
 			break;
 		case '<':
 			next(s);
 			if (s->chr == '-') {
 				next(s);
-				tok = SEND;
+				type = SEND;
 			} else {
-				tok = switch4(s, LSS, LTE, '<', SHL, SHL_ASSIGN);
+				type = switch4(s, LSS, LTE, '<', SHL, SHL_ASSIGN);
 			}
 			break;
 		case '>':
 			next(s);
-			tok = switch4(s, GTR, GTE, '>', SHR, SHR_ASSIGN);
+			type = switch4(s, GTR, GTE, '>', SHR, SHR_ASSIGN);
 			break;
 		case '=':
 			next(s);
-			tok = switch2(s, ASSIGN, EQL);
+			type = switch2(s, ASSIGN, EQL);
 			break;
 		case '&':
 			next(s);
-			tok = switch3(s, AND, AND_ASSIGN, '&', LAND);
+			type = switch3(s, AND, AND_ASSIGN, '&', LAND);
 			break;
 		case '^':
 			next(s);
-			tok = switch2(s, XOR, XOR_ASSIGN);
+			type = switch2(s, XOR, XOR_ASSIGN);
 			break;
 		case '|':
 			next(s);
-			tok = switch3(s, OR, OR_ASSIGN, '|', LOR);
+			type = switch3(s, OR, OR_ASSIGN, '|', LOR);
 			break;
 		case '?':
 			next(s);
-			tok = COND;
+			type = COND;
 			break;
 		case EOF:
 			next(s);
-			tok = TOK_EOF;
+			type = TOK_EOF;
 			break;
 		default:
-			tok = ILLEGAL;
+			type = ILLEGAL;
 			dest->lit[0] = s->chr;
 			dest->lit[1] = '\0';
 			next(s); /* Always advance. */
 		}
 	}
 
-	if (tok == ILLEGAL) {
-		send_error(&s->pos, ERR, "Illegal token '%s'", dest->lit);
+	if (type == ILLEGAL) {
+		send_error(&s->pos, ERR, "Illegal typeen '%s'", dest->lit);
 	}
 
 	memcpy(&dest->pos, &start, sizeof(dest->pos));
-	dest->tok = tok;
+	dest->type = type;
 }
 
 /* If the next token is expected, write to *dest and consume
  * it. Otherwise, send an error. */
-void expect(Scanner *s, Token expected, FullToken *dest)
+void expect(Scanner *s, TokenType expected, Token *dest)
 {
-	if (s->current.tok == expected) {
+	if (s->current.type == expected) {
 		if (dest) *dest = s->current;
 		scan(s);
 	} else {
 		send_error(&s->current.pos, ERR, "Expected %s, but received %s",
-			tokstr(expected), tokstr(s->current.tok));
+			tokstr(expected), tokstr(s->current.type));
 		return;
 	}
 }

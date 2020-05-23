@@ -26,11 +26,10 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
  * processing the syntax */
 void skip_codeblock(Scanner *s)
 {
-	FullToken t;
 	int depth = 0;
 
 	do {
-		switch (s->current.tok) {
+		switch (s->current.type) {
 		case LBRACE:
 			depth++;
 			break;
@@ -38,7 +37,7 @@ void skip_codeblock(Scanner *s)
 			depth--;
 			break;
 		case TOK_EOF:
-			send_error(&t.pos, ERR, "Unexpected EOF");
+			send_error(&s->current.pos, ERR, "Unexpected EOF");
 			return;
 		default:
 			break;
@@ -51,13 +50,13 @@ void skip_codeblock(Scanner *s)
 
 static void report_processor(Scanner *s)
 {
-	FullToken name;
-	FullToken source;
+	Token name;
+	Token source;
 
 	expect(s, PROCESSOR, NULL);
 	expect(s, IDENTIFIER, &name);
 
-	switch (s->current.tok) {
+	switch (s->current.type) {
 	case LBRACE:
 		skip_codeblock(s);
 		printf("Processor %s {...}\n", name.lit);
@@ -70,14 +69,14 @@ static void report_processor(Scanner *s)
 		break;
 	default:
 		send_error(&s->current.pos, ERR, "Unexpected token %s",
-			tokstr(s->current.tok));
+			tokstr(s->current.type));
 	}
 }
 
 static void report_buffer(Scanner *s)
 {
-	FullToken name;
-	FullToken value;
+	Token name;
+	Token value;
 
 	expect(s, BUFFER, NULL);
 	expect(s, IDENTIFIER, &name);
@@ -90,7 +89,7 @@ static void report_buffer(Scanner *s)
 
 static void report_stack(Scanner *s)
 {
-	FullToken name;
+	Token name;
 
 	expect(s, STACK, NULL);
 	expect(s, IDENTIFIER, &name);
@@ -101,10 +100,10 @@ static void report_stack(Scanner *s)
 
 static void report_wire(Scanner *s)
 {
-	FullToken srcnode;
-	FullToken srcport;
-	FullToken destnode;
-	FullToken destport;
+	Token srcnode;
+	Token srcport;
+	Token destnode;
+	Token destport;
 
 	expect(s, IDENTIFIER, &srcnode);
 	expect(s, PERIOD, NULL);
@@ -133,7 +132,7 @@ int main(int argc, char *argv[])
 
 	init_scanner(&s, Globals.f);
 	do {
-		switch (s.current.tok) {
+		switch (s.current.type) {
 		case PROCESSOR:
 			report_processor(&s);
 			break;
@@ -148,10 +147,10 @@ int main(int argc, char *argv[])
 			break;
 		default:
 			send_error(&s.current.pos, ERR,
-				"Unexpected token %s", tokstr(s.current.tok));
+				"Unexpected token %s", tokstr(s.current.type));
 			break;
 		}
-	} while (s.current.tok != TOK_EOF);
+	} while (s.current.type != TOK_EOF);
 
 	fclose(Globals.f);
 	return 0;

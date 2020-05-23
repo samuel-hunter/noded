@@ -99,7 +99,7 @@ static const char *tokens[] = {
 
 struct {
 	const char *literal;
-	Token tok;
+	TokenType type;
 } keywords[] = {
 	{"break", BREAK},
 	{"continue", CONTINUE},
@@ -118,17 +118,17 @@ struct {
 
 // map an identifier to its keyword token or IDENTIFIER if not a
 // keyword.
-Token lookup(char ident[])
+TokenType lookup(char ident[])
 {
 	for (size_t i = 0; keywords[i].literal != NULL; i++) {
 		if (strcmp(keywords[i].literal, ident) == 0)
-			return keywords[i].tok;
+			return keywords[i].type;
 	}
 
 	return IDENTIFIER;
 }
 
-const char *tokstr(Token tok)
+const char *tokstr(TokenType type)
 {
-	return tokens[tok];
+	return tokens[type];
 }
