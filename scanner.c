@@ -98,8 +98,7 @@ void init_scanner(Scanner *scanner, FILE *f)
 	scanner->f = f;
 	scanner->pos.lineno = 1;
 
-	next(scanner); /* Populate the rune buffer. */
-	scan(scanner); /* Populate the peek buffer. */
+	next(scanner); /* Prime the rune buffer. */
 }
 
 /*
@@ -422,10 +421,22 @@ static TokenType send(Scanner *s, char *lit, char c)
  * Scan the next token and store it in s->current, for the caller to
  * read from directly.
  */
-void scan(Scanner *s) {
-	Token *dest = &s->current; /* TODO expand later */
+void scan(Scanner *s, Token *dest) {
 	TokenType type;
-	Position start;
+
+	if (dest == NULL) {
+		/* Sometimes, you just want to consume a token without
+		 * caring what it has (e.g. consuming after peeking).
+		 * In this case, set it to some garbage memory --
+		 * &s->peek conveniently provides this! */
+		dest = &s->peek;
+	}
+
+	if (s->buffered) {
+		s->buffered = false;
+		*dest = s->peek;
+		return;
+	}
 
 	if (!DEBUG) {
 		/* By default, set the literal empty. */
@@ -438,7 +449,7 @@ void scan(Scanner *s) {
 
 	do {
 		skip_space(s);
-		start = s->pos;
+		dest->pos = s->pos;
 
 		int c = s->chr;
 		if (isdigit(c)) {
@@ -464,20 +475,40 @@ void scan(Scanner *s) {
 		send_error(&s->pos, ERR, "Illegal token '%s'", dest->lit);
 	}
 
-	dest->pos = start;
 	dest->type = type;
+}
+
+/* Set *dest to the next token without consuming it */
+void peek(Scanner *s, Token *dest)
+{
+	if (!s->buffered) {
+		scan(s, &s->peek);
+		s->buffered = true;
+	}
+
+	if (dest) *dest = s->peek;
+}
+
+/* Return the type of the next token without consuming it */
+TokenType peektype(Scanner *s)
+{
+	Token tok;
+	peek(s, &tok);
+	return tok.type;
 }
 
 /* If the next token is expected, write to *dest and consume
  * it. Otherwise, send an error. */
 void expect(Scanner *s, TokenType expected, Token *dest)
 {
-	if (s->current.type == expected) {
-		if (dest) *dest = s->current;
-		scan(s);
+	Token tok;
+	peek(s, &tok);
+
+	if (expected == tok.type) {
+		scan(s, dest);
 	} else {
-		send_error(&s->current.pos, ERR, "Expected %s, but received %s",
-			tokstr(expected), tokstr(s->current.type));
+		send_error(&tok.pos, ERR, "Expected %s, but received %s",
+			tokstr(expected), tokstr(tok.type));
 		return;
 	}
 }

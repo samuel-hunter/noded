@@ -139,7 +139,8 @@ struct Scanner {
 	Position pos;
 
 	/* Peek buffer */
-	Token current;
+	bool buffered;
+	Token peek;
 };
 
 typedef struct SymDict SymDict;
@@ -177,9 +178,11 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...);
 
 /* scanner.c */
 
-void init_scanner(Scanner *scanner, FILE *f);
-void scan(Scanner *scanner);
-void expect(Scanner *scanner, TokenType expected, Token *dest);
+void init_scanner(Scanner *s, FILE *f);
+void scan(Scanner *s, Token *dest);
+void peek(Scanner *s, Token *dest);
+TokenType peektype(Scanner *s);
+void expect(Scanner *s, TokenType expected, Token *dest);
 
 
 /* token.c */

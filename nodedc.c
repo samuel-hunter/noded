@@ -26,10 +26,12 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
  * processing the syntax */
 void skip_codeblock(Scanner *s)
 {
+	Token tok;
 	int depth = 0;
 
 	do {
-		switch (s->current.type) {
+		scan(s, &tok);
+		switch (tok.type) {
 		case LBRACE:
 			depth++;
 			break;
@@ -37,13 +39,11 @@ void skip_codeblock(Scanner *s)
 			depth--;
 			break;
 		case TOK_EOF:
-			send_error(&s->current.pos, ERR, "Unexpected EOF");
+			send_error(&s->peek.pos, ERR, "Unexpected EOF");
 			return;
 		default:
 			break;
 		}
-
-		scan(s);
 	} while (depth > 0);
 }
 
@@ -56,20 +56,20 @@ static void report_processor(Scanner *s)
 	expect(s, PROCESSOR, NULL);
 	expect(s, IDENTIFIER, &name);
 
-	switch (s->current.type) {
+	switch (peektype(s)) {
 	case LBRACE:
 		skip_codeblock(s);
 		printf("Processor %s {...}\n", name.lit);
 		break;
 	case ASSIGN:
-		scan(s);
+		scan(s, NULL);
 		expect(s, IDENTIFIER, &source);
 		expect(s, SEMICOLON, NULL);
 		printf("Processor %s copies %s\n", name.lit, source.lit);
 		break;
 	default:
-		send_error(&s->current.pos, ERR, "Unexpected token %s",
-			tokstr(s->current.type));
+		send_error(&s->peek.pos, ERR, "Unexpected token %s",
+			tokstr(s->peek.type));
 	}
 }
 
@@ -131,8 +131,8 @@ int main(int argc, char *argv[])
 		err(1, "%s", argv[1]);
 
 	init_scanner(&s, Globals.f);
-	do {
-		switch (s.current.type) {
+	while (peektype(&s) != TOK_EOF) {
+		switch (peektype(&s)) {
 		case PROCESSOR:
 			report_processor(&s);
 			break;
@@ -146,11 +146,11 @@ int main(int argc, char *argv[])
 			report_wire(&s);
 			break;
 		default:
-			send_error(&s.current.pos, ERR,
-				"Unexpected token %s", tokstr(s.current.type));
+			send_error(&s.peek.pos, ERR,
+				"Unexpected token %s", tokstr(s.peek.type));
 			break;
 		}
-	} while (s.current.type != TOK_EOF);
+	}
 
 	fclose(Globals.f);
 	return 0;
