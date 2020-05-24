@@ -30,22 +30,7 @@ static void next(Scanner *s)
 		s->pos.colno++;
 	}
 
-	/* Refresh the buffer when required. */
-	if (s->offset == s->nread && !(feof(s->f) || ferror(s->f))) {
-		s->offset = 0;
-		s->nread = fread(s->buf, 1, sizeof(s->buf), s->f);
-		/*
-		 * If an I/O error happens, we can pretend it's the
-		 * same as feof and return an EOF character.
-		 */
-	}
-
-	/* Replace next character. */
-	if (s->offset == s->nread) {
-		s->chr = EOF;
-	} else {
-		s->chr = s->buf[s->offset++];
-	}
+	s->chr = getc(s->f);
 }
 
 void init_scanner(Scanner *scanner, FILE *f)

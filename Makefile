@@ -10,4 +10,4 @@ nodedc: alloc.o dict.o err.o nodedc.o scanner.o token.o
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	$(RM) *.o noded
+	$(RM) *.o nodedc

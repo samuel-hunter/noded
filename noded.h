@@ -132,9 +132,6 @@ typedef struct Scanner Scanner;
 struct Scanner {
 	/* The file it reads, and a buffer to store some state. */
 	FILE *f; /* Not owned by the scanner. */
-	char buf[512];
-	size_t offset;
-	size_t nread;
 
 	char chr;      /* Current character */
 	Position pos;
