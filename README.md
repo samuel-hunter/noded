@@ -5,8 +5,8 @@ communicating with each other.
 ## Description
 
 A Noded program consists of a collection of nodes operating at the
-same time and communicating to each other through ports wired to
-each other.
+same time and communicating to each other through ports wired to each
+other.
 
 This project is maid half as a toy implementation, and half as a
 thought experiment for a concurrent language. Please don't have any
@@ -14,8 +14,11 @@ expectations of it being fast, or accurate, or cope with invalid code.
 
 ## Progress
 
-I'm in progress of the implementation rewrite. The working version
-before the rewrite is tagged as `v0.0.0`.
+I'm in progress of a rewrite. The working version before the rewrite
+is tagged as `v0.0.0`, and it was written very ad-hoc style as I
+figured out what the problem really was. Now that I have an idea, this
+rewrite should make a much cleaner version with code I'd be more proud
+of!
 
 ## Language Specification
 
