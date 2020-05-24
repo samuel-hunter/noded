@@ -32,7 +32,7 @@ static const char *tokens[] = {
 	[PORT] = "PORT",
 	[NUMBER] = "NUMBER",
 	[CHAR] = "CHAR",
-	[STRING_LITERAL] = "STRING_LITERAL",
+	[STRING] = "STRING",
 
 	// Operators
 	[SEND] = "<-",

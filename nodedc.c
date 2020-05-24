@@ -81,7 +81,7 @@ static void report_buffer(Scanner *s)
 	expect(s, BUFFER, NULL);
 	expect(s, IDENTIFIER, &name);
 	expect(s, ASSIGN, NULL);
-	expect(s, STRING_LITERAL, &value);
+	expect(s, STRING, &value);
 	expect(s, SEMICOLON, NULL);
 
 	printf("Buffer %s = \"%s\"\n", name.lit, value.lit);

@@ -32,6 +32,8 @@ typedef enum
 	 * zero-value will be registered as invalid. */
 	ILLEGAL,
 	TOK_EOF,
+	/* Internal token for scanner.c that isn't returned */
+	SCAN_AGAIN,
 
 	LPAREN, /* ( */
 	RPAREN, /* ) */
@@ -47,9 +49,9 @@ typedef enum
 	IDENTIFIER,
 	VARIABLE,
 	PORT,
-	NUMBER,         /* 123, 0x123, 0123 */
-	CHAR,           /* 'a', '\0123' */
-	STRING_LITERAL, /* "abc" */
+	NUMBER,  /* 123, 0x123, 0123 */
+	CHAR,    /* 'a', '\0123' */
+	STRING,  /* "abc" */
 
 	/* Operators are (roughly) ordered by infix precedence. */
 	SEND, /* <- */
