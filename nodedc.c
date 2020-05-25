@@ -5,10 +5,14 @@
 
 #include "noded.h"
 
+static const int ERROR_MAX = 10;
+
 /* Module-global variables */
 static struct {
+	SymDict dict; /* todo move to main() in the future */
 	char *fname;
 	FILE *f;
+	int nerrors;
 } Globals = {0};
 
 void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
@@ -19,47 +23,63 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 	vprint_error(Globals.fname, Globals.f, pos, type, fmt, ap);
 	va_end(ap);
 
-	exit(1); /* Abort */
+	switch (type) {
+	case WARN:
+		break;
+	case ERR:
+		if (++Globals.nerrors > ERROR_MAX)
+			errx(1, "too many errors.");
+		break;
+	case FATAL:
+		/* Fatal errors mean the program should die */
+		errx(1, "fatal error.");
+		break;
+	}
 }
 
-/* Assumes valid syntax, attempts to skip the entire codeblock without
- * processing the syntax */
-void skip_codeblock(Scanner *s)
+/* Print disassembled code */
+void disasm(uint8_t *bytecode, size_t n)
 {
-	Token tok;
-	int depth = 0;
-
-	do {
-		scan(s, &tok);
-		switch (tok.type) {
-		case LBRACE:
-			depth++;
+	uint8_t *end = &bytecode[n];
+	while (bytecode < end) {
+		int advance = 1;
+		printf("    %s", opstr(bytecode[0]));
+		switch (bytecode[0]) {
+		case OP_PUSH:
+			advance = 2;
+			printf(" 0x%02x\n", bytecode[1]);
 			break;
-		case RBRACE:
-			depth--;
-			break;
-		case TOK_EOF:
-			send_error(&s->peek.pos, ERR, "Unexpected EOF");
-			return;
 		default:
+			printf("\n");
 			break;
 		}
-	} while (depth > 0);
-}
 
+		bytecode += advance;
+	}
+}
 
 static void report_processor(Scanner *s)
 {
 	Token name;
 	Token source;
+	size_t n;
+	uint8_t *bytecode;
 
 	expect(s, PROCESSOR, NULL);
 	expect(s, IDENTIFIER, &name);
 
 	switch (peektype(s)) {
 	case LBRACE:
-		skip_codeblock(s);
-		printf("Processor %s {...}\n", name.lit);
+		/* assumes compile returns non-NULL because
+		 * send_error() automatically exits */
+		bytecode = compile(s, &Globals.dict, &n);
+
+		if (Globals.nerrors == 0) {
+			printf("Processor %s:\n", name.lit);
+			disasm(bytecode, n);
+		}
+
+		free(bytecode);
 		break;
 	case ASSIGN:
 		scan(s, NULL);
@@ -153,5 +173,5 @@ int main(int argc, char *argv[])
 	}
 
 	fclose(Globals.f);
-	return 0;
+	return Globals.nerrors ? 1 : 0;
 }

@@ -512,3 +512,10 @@ void expect(Scanner *s, TokenType expected, Token *dest)
 		return;
 	}
 }
+
+/* Keep scanning tokens until the next token type is target. */
+void zap_to(Scanner *s, TokenType target)
+{
+	while (target != peektype(s))
+		scan(s, NULL);
+}

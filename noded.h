@@ -21,9 +21,13 @@ typedef enum
  * the longest escape sequence for a string (\x##, or \###). This is
  * the longest literal size that any program would reasonably need.
  */
-enum {
+enum
+{
 	BUFFER_NODE_MAX = UINT8_MAX+1,
 	LITERAL_MAX = BUFFER_NODE_MAX*4, /* Max byte size for a literal.  */
+
+	PORT_MAX = 4,
+	VAR_MAX = 4,
 };
 
 typedef enum
@@ -115,7 +119,67 @@ typedef enum
 	PROCESSOR,
 	STACK,
 	keyword_end,
+
+	NUM_TOKENS,
 } TokenType;
+
+typedef enum
+{
+	/* Let OP_INVALID be zero so that any zero-value buffer that
+	 * wasn't initialized can be caught early. */
+	OP_INVALID,
+	OP_NOOP,
+
+	OP_PUSH,
+	OP_DUP,
+	OP_POP,
+
+	OP_NEG,
+	OP_LNOT,
+	OP_NOT,
+
+	OP_LOR,
+	OP_LAND,
+	OP_OR,
+	OP_XOR,
+	OP_AND,
+	OP_EQL,
+	OP_LSS,
+	OP_LTE,
+	OP_SHL,
+	OP_SHR,
+	OP_ADD,
+	OP_SUB,
+	OP_MUL,
+	OP_DIV,
+	OP_MOD,
+
+	/* OP_LOAD# should match the number of vars defined in VAR_MAX */
+	OP_LOAD0,
+	OP_LOAD1,
+	OP_LOAD2,
+	OP_LOAD3,
+
+	/* Same here */
+	OP_SAVE0,
+	OP_SAVE1,
+	OP_SAVE2,
+	OP_SAVE3,
+
+	/* OP_SEND# should match the number of ports in PORT_MAX */
+	OP_SEND0,
+	OP_SEND1,
+	OP_SEND2,
+	OP_SEND3,
+
+	/* etc etc */
+	OP_RECV0,
+	OP_RECV1,
+	OP_RECV2,
+	OP_RECV3,
+} Opcode;
+
+	
 
 typedef struct Position Position;
 struct Position {
@@ -150,6 +214,13 @@ struct SymDict {
 	size_t cap;
 };
 
+typedef struct ByteVec ByteVec;
+struct ByteVec {
+	uint8_t *buf;
+	size_t len;
+	size_t cap;
+};
+
 
 /* alloc.c */
 
@@ -159,7 +230,8 @@ void *erealloc(void *ptr, size_t size);
 
 /* compiler.c */
 
-void skip_codeblock(Scanner *s);
+const char *opstr(Opcode op);
+uint8_t *compile(Scanner *s, SymDict *dict, size_t *n);
 
 
 /* dict.c */
@@ -183,12 +255,20 @@ void scan(Scanner *s, Token *dest);
 void peek(Scanner *s, Token *dest);
 TokenType peektype(Scanner *s);
 void expect(Scanner *s, TokenType expected, Token *dest);
+void zap_to(Scanner *s, TokenType target);
 
 
 /* token.c */
 
 TokenType lookup(char ident[]);
 const char *tokstr(TokenType type);
+
+
+/* vec.c */
+
+void bytevec_append(ByteVec *vec, uint8_t val);
+uint8_t *bytevec_reserve(ByteVec *vec, size_t nmemb);
+void bytevec_shrink(ByteVec *vec);
 
 
 #endif /* NODED_H */
