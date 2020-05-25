@@ -38,31 +38,41 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 }
 
 /* Print disassembled code */
-void disasm(uint8_t *bytecode, size_t n)
+void disasm(uint8_t *bytecode, uint16_t n)
 {
-	uint8_t *end = &bytecode[n];
-	while (bytecode < end) {
+	uint16_t addr = 0;
+	while (addr < n) {
+		uint8_t *instr = &bytecode[addr];
 		int advance = 1;
-		printf("    %s", opstr(bytecode[0]));
-		switch (bytecode[0]) {
+		uint16_t jmpaddr;
+
+		printf("\t0x%04x    %s", addr, opstr(instr[0]));
+		switch (instr[0]) {
 		case OP_PUSH:
 			advance = 2;
-			printf(" 0x%02x\n", bytecode[1]);
+			printf("\t0x%02x\n", instr[1]);
+			break;
+		case OP_JMP:
+		case OP_FJMP:
+			advance = 3;
+			jmpaddr = instr[1] + (instr[2]<<8);
+			printf("\t0x%04x\n", jmpaddr);
 			break;
 		default:
 			printf("\n");
 			break;
 		}
 
-		bytecode += advance;
+		addr += advance;
 	}
+	printf("\t0x%04x    EOF\n", n);
 }
 
 static void report_processor(Scanner *s)
 {
 	Token name;
 	Token source;
-	size_t n;
+	uint16_t n;
 	uint8_t *bytecode;
 
 	expect(s, PROCESSOR, NULL);

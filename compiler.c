@@ -5,6 +5,47 @@
 
 #include "noded.h"
 
+/* Label metadata, for keeping track of labels and
+ * resolving bytecode from goto statements */
+typedef struct Label Label;
+struct Label {
+	size_t id;
+	bool defined;
+	uint16_t addr;
+
+	AddrVec gotos;
+	Position some_goto;
+};
+
+/* The scope of a loop block */
+typedef struct Scope Scope;
+struct Scope {
+	Scope *parent;
+
+	AddrVec breaks;
+	uint16_t continue_addr;
+};
+
+typedef struct Context Context;
+struct Context {
+	Scanner *s;
+	SymDict *dict;
+
+	Scope *scope;
+
+	size_t ports[PORT_MAX];
+	int nports;
+	size_t vars[VAR_MAX];
+	int nvars;
+
+	/* inline label struct vector */
+	Label *labels;
+	size_t nlabels;
+	size_t labelcap;
+
+	ByteVec bytecode;
+};
+
 typedef enum
 {
 	PREC_NONE,
@@ -25,19 +66,6 @@ typedef enum
 	PREC_FACTOR,
 	PREC_UNARY,
 } Precedence;
-
-typedef struct Context Context;
-struct Context {
-	Scanner *s;
-	SymDict *dict;
-
-	size_t ports[PORT_MAX];
-	int nports;
-	size_t vars[VAR_MAX];
-	int nvars;
-
-	ByteVec bytecode;
-};
 
 typedef struct Expression Expression;
 struct Expression {
@@ -62,10 +90,13 @@ static Expression group(Context *ctx, Token *tok);
 static Expression prefix(Context *ctx, Token *tok);
 
 static Expression send(Context *ctx, Expression left, Token *tok);
+static Expression comma(Context *ctx, Expression left, Token *tok);
 static Expression binary(Context *ctx, Expression left, Token *tok);
 static Expression assign(Context *ctx, Expression left, Token *tok);
 static Expression cond(Context *ctx, Expression left, Token *tok);
 static Expression postfix(Context *ctx, Expression left, Token *tok);
+
+static void parse_stmt(Context *ctx);
 
 /*
  * The compiler uses a Pratt Parser for compiling expressions into
@@ -77,9 +108,10 @@ static ParseRule parse_table[NUM_TOKENS] = {
 	[NUMBER] = {&primary, NULL, PREC_NONE},
 	[VARIABLE] = {&primary, NULL, PREC_NONE},
 	[PORT] = {&primary, NULL, PREC_NONE},
+	[CHAR] = {&primary, NULL, PREC_NONE},
 	[LPAREN] = {&group, NULL, PREC_NONE},
 	[SEND] = {NULL, &send, PREC_SEND},
-	[COMMA] = {NULL, &binary, PREC_COMMA},
+	[COMMA] = {NULL, &comma, PREC_COMMA},
 	[ASSIGN] = {NULL, &assign, PREC_ASSIGN},
 	[OR_ASSIGN] = {NULL, &assign, PREC_ASSIGN},
 	[XOR_ASSIGN] = {NULL, &assign, PREC_ASSIGN},
@@ -144,6 +176,9 @@ static const char *opcodes[] = {
 	[OP_DIV] = "DIV",
 	[OP_MOD] = "MOD",
 
+	[OP_JMP] = "JMP",
+	[OP_FJMP] = "FJMP",
+
 	[OP_LOAD0] = "LOAD0",
 	[OP_LOAD1] = "LOAD1",
 	[OP_LOAD2] = "LOAD2",
@@ -163,6 +198,8 @@ static const char *opcodes[] = {
 	[OP_RECV1] = "RECV1",
 	[OP_RECV2] = "RECV2",
 	[OP_RECV3] = "RECV3",
+
+	[OP_HALT] = "HALT",
 };
 
 /* Return the port# associated with tok's literal, or create a new one
@@ -214,18 +251,26 @@ const char *opstr(Opcode op)
 	return opcodes[op];
 }
 
+static uint16_t here(const Context *ctx)
+{
+	return (uint16_t) ctx->bytecode.len;
+}
+
+/* assemble a no-arg instruction */
 static void asm_op(Context *ctx, Opcode op)
 {
 	bytevec_append(&ctx->bytecode, op);
 }
 
+/* Assemble a push instruction */
 static void asm_push(Context *ctx, uint8_t val)
 {
-	uint8_t *buf = bytevec_reserve(&ctx->bytecode, 2);
-	*buf++ = OP_PUSH;
-	*buf++ = val & 0xFF;
+	asm_op(ctx, OP_PUSH);
+	bytevec_append(&ctx->bytecode, val);
 }
 
+/* Evaluate an expression type and assemble any leftover instructions
+ * to ensure the value of an expression is assembled */
 static void asm_value(Context *ctx, Expression expr, Token *tok)
 {
 	switch (expr.type) {
@@ -239,49 +284,133 @@ static void asm_value(Context *ctx, Expression expr, Token *tok)
 		send_error(&tok->pos, ERR, "ports are invalid operands outside send statements");
 		break;
 	case EXPR_SEND:
-		send_error(&tok->pos, ERR, "operator received send statement as an expression");
+		send_error(&tok->pos, ERR, "send statements are not expressions");
 		break;
 	}
 }
 
-/* Parse a cstring into a uint8 value. Mark an error on boundary
- * issues and invalid literals. */
-static uint8_t parseint(Token *tok)
+/* patch in an address for a jump instruction */
+static void patch_addr(Context *ctx, uint16_t idx, uint16_t addr)
 {
-	char *endptr;
-
-	/* Settings base=0 will let the stdlib handle 0#, 0x#, etc. */
-	unsigned long val = strtoul(tok->lit, &endptr, 0);
-
-	if (*endptr != '\0') {
-		send_error(&tok->pos, ERR, "Invalid integer");
-		return 0;
-	}
-
-	if (val > UINT8_MAX) {
-		send_error(&tok->pos, ERR, "Out of bounds error");
-		return 0;
-	}
-
-	return (uint8_t) val;
+	ctx->bytecode.buf[idx++] = addr & 0xFF;
+	ctx->bytecode.buf[idx++] = addr>>8 & 0xFF;
 }
 
+/* patch in the current address for a jump instruction */
+static void patch_here(Context *ctx, uint16_t idx)
+{
+	patch_addr(ctx, idx, here(ctx));
+}
+
+/* assemble a jump instruction with the predetermined address */
+static void asm_jump(Context *ctx, Opcode op, uint16_t addr)
+{
+	asm_op(ctx, op);
+	patch_addr(ctx, (uint16_t) bytevec_reserve(&ctx->bytecode, 2), addr);
+}
+
+/* assemble a jump instruction and return a pointer to patch the
+ * address later, for use with patch_addr() or patch_here() */
+static uint16_t asm_jump2(Context *ctx, Opcode op)
+{
+	asm_op(ctx, op);
+	return (uint16_t) bytevec_reserve(&ctx->bytecode, 2);
+}
+
+/* push a scope in context, recording breaks and resolving continues */
+static void push_scope(Context *ctx)
+{
+	Scope *scope = ecalloc(1, sizeof(*scope));
+	scope->parent = ctx->scope;
+	scope->continue_addr = here(ctx);
+
+	ctx->scope = scope;
+}
+
+/* partially assemble a jump outside a scope to be fully resolve when
+ * the scope pops */
+static void asm_break(Context *ctx, Opcode op)
+{
+	addrvec_append(&ctx->scope->breaks, asm_jump2(ctx, op));
+}
+
+/* assemble a jump to the beginning of the current scope */
+static void asm_continue(Context *ctx, Opcode op)
+{
+	asm_jump(ctx, op, ctx->scope->continue_addr);
+}
+
+/* pop a scope from the context, resolving all breaks */
+static void pop_scope(Context *ctx)
+{
+	Scope *scope = ctx->scope;
+	AddrVec *breaks = &scope->breaks;
+
+	for (size_t i = 0; i < breaks->len; i++) {
+		patch_here(ctx, breaks->buf[i]);
+	}
+
+	addrvec_clear(breaks);
+	ctx->scope = scope->parent;
+	free(ctx->scope);
+}
+
+/* Find or create a Label struct with the appropriate id */
+static Label *find_label(Context *ctx, size_t id)
+{
+	for (size_t i = 0; i < ctx->nlabels; i++) {
+		if (id == ctx->labels[i].id) return &ctx->labels[i];
+	}
+
+	/* Expand the label vector when necessary */
+	if (ctx->nlabels == ctx->labelcap) {
+		ctx->labelcap = ctx->labelcap ? ctx->labelcap*2 : 8;
+		ctx->labels = erealloc(ctx->labels,
+			ctx->labelcap * sizeof(*ctx->labels));
+	}
+
+	/* Initialize the new label struct and return its pointer */
+	ctx->labels[ctx->nlabels].id = id;
+	return &ctx->labels[ctx->nlabels++];
+}
+
+/* Record the address of a label to resolve later */
+static void add_label_here(Context *ctx, size_t id)
+{
+	Label *label = find_label(ctx, id);
+	label->defined = true;
+	label->addr = here(ctx);
+}
+
+/* Partially assemble a goto to resolve at the end of compilation */
+static void asm_goto(Context *ctx, Token *labeltok)
+{
+	Label *label = find_label(ctx, sym_id(ctx->dict, labeltok->lit));
+	addrvec_append(&label->gotos, asm_jump2(ctx, OP_JMP));
+	label->some_goto = labeltok->pos;
+}
+
+/* assemble a primary expression */
 static Expression primary(Context *ctx, Token *tok)
 {
 	switch (tok->type) {
 	case NUMBER:
-		asm_push(ctx, parseint(tok));
+		asm_push(ctx, parse_int(tok));
 		return (Expression){EXPR_NORMAL, 0};
 	case VARIABLE:
 		return (Expression){EXPR_VAR, getvar(ctx, tok)};
 	case PORT:
 		return (Expression){EXPR_PORT, getport(ctx, tok)};
+	case CHAR:
+		asm_push(ctx, parse_char(tok));
+		return (Expression){EXPR_NORMAL, 0};
 	default:
 		send_error(&tok->pos, ERR, "compiler bug: unimplemented operand");
 		return (Expression){EXPR_NORMAL, 0};
 	}
 }
 
+/* assemble an expression wrapped around a pair of parentheses */
 static Expression group(Context *ctx, Token *tok)
 {
 	(void)tok;
@@ -292,6 +421,7 @@ static Expression group(Context *ctx, Token *tok)
 	return result;
 }
 
+/* assemble an expression with a prefix operand */
 static Expression prefix(Context *ctx, Token *tok)
 {
 	Expression base;
@@ -344,6 +474,7 @@ static Expression prefix(Context *ctx, Token *tok)
 	return (Expression){EXPR_NORMAL, 0};
 }
 
+/* assemble a send statement */
 static Expression send(Context *ctx, Expression left, Token *tok)
 {
 	Expression right = parse_expr(ctx, PREC_SEND);
@@ -367,97 +498,91 @@ static Expression send(Context *ctx, Expression left, Token *tok)
 	} else if (left.type == EXPR_PORT) {
 		/* %port <- expr */
 		asm_value(ctx, right, tok);
-		asm_op(ctx, OP_SEND0 + left.type);
+		asm_op(ctx, OP_SEND0 + left.idx);
 	} else {
 		send_error(&tok->pos, ERR,
 			"send statement requries a port operand, but can't find any");
 	}
 
+	/* To preserve single-pass compilation, send statements are masked as an
+	 * expression, and any attempts to embed it in a larger expression trips
+     * asm_value(). */
 	return (Expression){EXPR_SEND, 0};
+}
+
+static Expression comma(Context *ctx, Expression left, Token *tok)
+{
+	(void)tok;
+
+	if (left.type == EXPR_NORMAL)
+		asm_op(ctx, OP_POP);
+	return parse_expr(ctx, PREC_COMMA);
 }
 
 static Expression binary(Context *ctx, Expression left, Token *tok)
 {
+	Expression expr;
+
 	asm_value(ctx, left, tok);
+	expr = parse_expr(ctx, parse_table[tok->type].prec);
+	asm_value(ctx, expr, tok);
 
 	switch (tok->type) {
-	case COMMA:
-		asm_op(ctx, OP_POP);
-		parse_expr(ctx, PREC_COMMA);
-		break;
 	case LOR:
-		parse_expr(ctx, PREC_LOR);
 		asm_op(ctx, OP_LOR);
 		break;
 	case LAND:
-		parse_expr(ctx, PREC_LAND);
 		asm_op(ctx, OP_LAND);
 		break;
 	case OR:
-		parse_expr(ctx, PREC_OR);
 		asm_op(ctx, OP_OR);
 		break;
 	case XOR:
-		parse_expr(ctx, PREC_XOR);
 		asm_op(ctx, OP_XOR);
 		break;
 	case AND:
-		parse_expr(ctx, PREC_AND);
 		asm_op(ctx, OP_AND);
 		break;
 	case EQL:
-		parse_expr(ctx, PREC_EQL);
 		asm_op(ctx, OP_EQL);
 		break;
 	case NEQ:
-		parse_expr(ctx, PREC_EQL);
 		asm_op(ctx, OP_EQL);
 		asm_op(ctx, OP_LNOT);
 		break;
 	case LSS:
-		parse_expr(ctx, PREC_CMP);
 		asm_op(ctx, OP_LSS);
 		break;
 	case LTE:
-		parse_expr(ctx, PREC_CMP);
 		asm_op(ctx, OP_LTE);
 		break;
 	case GTR:
-		parse_expr(ctx, PREC_CMP);
 		asm_op(ctx, OP_LTE);
 		asm_op(ctx, OP_LNOT);
 		break;
 	case GTE:
-		parse_expr(ctx, PREC_CMP);
 		asm_op(ctx, OP_LSS);
 		asm_op(ctx, OP_LNOT);
 		break;
 	case SHL:
-		parse_expr(ctx, PREC_SHIFT);
 		asm_op(ctx, OP_SHL);
 		break;
 	case SHR:
-		parse_expr(ctx, PREC_SHIFT);
 		asm_op(ctx, OP_SHR);
 		break;
 	case ADD:
-		parse_expr(ctx, PREC_TERM);
 		asm_op(ctx, OP_ADD);
 		break;
 	case SUB:
-		parse_expr(ctx, PREC_TERM);
 		asm_op(ctx, OP_SUB);
 		break;
 	case MUL:
-		parse_expr(ctx, PREC_FACTOR);
 		asm_op(ctx, OP_MUL);
 		break;
 	case DIV:
-		parse_expr(ctx, PREC_FACTOR);
 		asm_op(ctx, OP_DIV);
 		break;
 	case MOD:
-		parse_expr(ctx, PREC_FACTOR);
 		asm_op(ctx, OP_MOD);
 		break;
 	default:
@@ -566,10 +691,10 @@ static Expression postfix(Context *ctx, Expression left, Token *tok)
 
 	switch (tok->type) {
 	case INC:
-		asm_op(ctx, ADD);
+		asm_op(ctx, OP_ADD);
 		break;
 	case DEC:
-		asm_op(ctx, SUB);
+		asm_op(ctx, OP_SUB);
 		break;
 	default:
 		send_error(&tok->pos, ERR, "compiler bug: unimplemented postfix operator");
@@ -612,6 +737,178 @@ static Expression parse_expr(Context *ctx, Precedence prec)
 	return left;
 }
 
+static void parse_branch_stmt(Context *ctx)
+{
+	Token cmd;
+	Token label;
+	scan(ctx->s, &cmd);
+
+	switch (cmd.type) {
+	case BREAK:
+		if (!ctx->scope) {
+			send_error(&cmd.pos, ERR, "break statement outside a loop");
+			break;
+		}
+
+		asm_break(ctx, OP_JMP);
+		break;
+	case CONTINUE:
+		if (!ctx->scope) {
+			send_error(&cmd.pos, ERR, "continue statement outside a loop");
+			break;
+		}
+
+		asm_continue(ctx, OP_JMP);
+		break;
+	case GOTO:
+		expect(ctx->s, IDENTIFIER, &label);
+		asm_goto(ctx, &label);
+		break;
+	default:
+		break;
+	}
+
+	expect(ctx->s, SEMICOLON, NULL);
+}
+
+/* parse a series of statements enclosed in a block */
+static void parse_block_stmt(Context *ctx)
+{
+	Scanner *s = ctx->s;
+
+	expect(s, LBRACE, NULL);
+	while (RBRACE != peektype(s))
+		parse_stmt(ctx);
+	scan(s, NULL);
+}
+
+static void parse_if_stmt(Context *ctx)
+{
+	Scanner *s = ctx->s;
+	Token tok;
+	Expression expr;
+	uint16_t jmpfalse, jmpend;
+
+	expect(s, IF, NULL);      /* if */
+	expect(s, LPAREN, &tok);  /* (  */
+	expr = parse_expr(ctx, PREC_NONE); /* ... */
+	asm_value(ctx, expr, &tok);
+	expect(s, RPAREN, NULL); /* ) */
+	jmpfalse = asm_jump2(ctx, OP_FJMP);
+	parse_stmt(ctx); /* { ... } */
+
+	if (peektype(s) == ELSE) {
+		/* skip the otherwise clause */
+		jmpend = asm_jump2(ctx, OP_JMP);
+
+		expect(s, ELSE, NULL); /* else */
+		patch_here(ctx, jmpfalse); /* jump here if the conditional is false */
+		parse_stmt(ctx); /* { ... } */
+
+		patch_here(ctx, jmpend);
+	} else {
+		patch_here(ctx, jmpfalse);
+	}
+}
+
+static void parse_for_stmt(Context *ctx)
+{
+	Scanner *s = ctx->s;
+	Expression expr;
+	Token tok;
+	uint16_t body_jump, end_jump;
+	uint16_t post_addr;
+
+	expect(s, FOR, NULL);
+	expect(s, LPAREN, NULL);
+
+	/* initial */
+	expr = parse_expr(ctx, PREC_NONE);
+	if (expr.type == EXPR_NORMAL)
+		asm_op(ctx, OP_POP);
+	expect(s, SEMICOLON, NULL);
+
+	/* conditional */
+	peek(s, &tok);
+	expr = parse_expr(ctx, PREC_NONE);
+	asm_value(ctx, expr, &tok);
+	end_jump = asm_jump2(ctx, OP_FJMP);
+	body_jump = asm_jump2(ctx, OP_JMP);
+	expect(s, SEMICOLON, NULL);
+
+	/* push the scope here, so that continues get incremented */
+	push_scope(ctx);
+
+	/* post-body */
+	post_addr = here(ctx);
+	expr = parse_expr(ctx, PREC_NONE);
+	if (expr.type == EXPR_NORMAL)
+		asm_op(ctx, OP_POP);
+	asm_continue(ctx, OP_JMP);
+	expect(s, RPAREN, NULL);
+
+	/* body */
+	patch_here(ctx, body_jump);
+	parse_stmt(ctx);
+	asm_jump(ctx, OP_JMP, post_addr);
+
+	/* pop the scope here */
+	pop_scope(ctx);
+	patch_here(ctx, end_jump);
+}
+
+static void parse_while_stmt(Context *ctx)
+{
+	Scanner *s = ctx->s;
+	Token start;
+
+	push_scope(ctx);
+	expect(s, WHILE, &start);
+	expect(s, LPAREN, NULL);
+	parse_expr(ctx, PREC_NONE);
+	asm_break(ctx, OP_FJMP);
+	expect(s, RPAREN, NULL);
+
+	parse_stmt(ctx);
+	asm_continue(ctx, OP_JMP);
+
+	pop_scope(ctx);
+}
+
+static void parse_do_stmt(Context *ctx)
+{
+	Scanner *s = ctx->s;
+	Token tok;
+	Expression cond;
+
+	expect(s, DO, NULL);
+
+	push_scope(ctx);
+	parse_stmt(ctx);
+	pop_scope(ctx);
+
+	expect(s, WHILE, NULL);
+	expect(s, LPAREN, &tok);
+
+	cond = parse_expr(ctx, PREC_NONE);
+	asm_value(ctx, cond, &tok);
+	asm_op(ctx, OP_LNOT);
+	asm_continue(ctx, OP_FJMP);
+
+	expect(s, RPAREN, NULL);
+	expect(s, SEMICOLON, NULL);
+}
+
+static void parse_labeled_stmt(Context *ctx)
+{
+	Scanner *s = ctx->s;
+	Token label;
+
+	expect(s, IDENTIFIER, &label);
+	expect(s, COLON, NULL);
+	add_label_here(ctx, sym_id(ctx->dict, label.lit));
+}	
+
 static void parse_expr_stmt(Context *ctx)
 {
 	Expression expr = parse_expr(ctx, PREC_NONE);
@@ -622,23 +919,91 @@ static void parse_expr_stmt(Context *ctx)
 		asm_op(ctx, OP_POP);
 }
 
-static void parse_block(Context *ctx)
+static void parse_stmt(Context *ctx)
 {
-	Scanner *s = ctx->s;
+	Token tok;
+	peek(ctx->s, &tok);
 
-	expect(s, LBRACE, NULL); /* { */
-	while (RBRACE != peektype(s))
-		parse_expr_stmt(ctx);
-	scan(s, NULL); /* } */
+	switch (tok.type) {
+	case BREAK:
+	case CONTINUE:
+	case GOTO:
+		parse_branch_stmt(ctx);
+		break;
+	case LBRACE:
+		parse_block_stmt(ctx);
+		break;
+	case IF:
+		parse_if_stmt(ctx);
+		break;
+	case FOR:
+		parse_for_stmt(ctx);
+		break;
+	case WHILE:
+		parse_while_stmt(ctx);
+		break;
+	case DO:
+		parse_do_stmt(ctx);
+		break;
+	case IDENTIFIER:
+		parse_labeled_stmt(ctx);
+		break;
+	case SEMICOLON:
+		/* empty statement */
+		scan(ctx->s, NULL);
+		break;
+	case HALT:
+		scan(ctx->s, NULL);
+		expect(ctx->s, SEMICOLON, NULL);
+		asm_op(ctx, OP_HALT);
+		break;
+	default:
+		if (parse_table[tok.type].prefix) {
+			parse_expr_stmt(ctx);
+		} else {
+			send_error(&tok.pos, ERR,
+				"Expected start of statement, but found %s(%s)",
+				tokstr(tok.type), tok.lit);
+
+			/* Zap to nearest semicolon or rbrace. */
+			while (tok.type != RBRACE && tok.type != SEMICOLON)
+				scan(ctx->s, &tok);
+		}
+		break;
+	}
 }
 
-uint8_t *compile(Scanner *s, SymDict *dict, size_t *n)
+uint8_t *compile(Scanner *s, SymDict *dict, uint16_t *n)
 {
+	Token tok;
 	Context ctx = {.s = s, .dict = dict};
 
-	parse_block(&ctx);
+	peek(s, &tok); /* Record the beginning position for later */
+	parse_block_stmt(&ctx);
 
+	/* Resolve all gotos */
+	for (size_t i = 0; i < ctx.nlabels; i++) {
+		Label *label = &ctx.labels[i];
+		if (!label->defined) {
+			send_error(&label->some_goto, ERR, "goto used without label defined");
+			continue;
+		}
+
+		for (size_t j = 0; j < label->gotos.len; j++) {
+			patch_addr(&ctx, label->gotos.buf[j], label->addr);
+		}
+		addrvec_clear(&label->gotos);
+	}
+	free(ctx.labels);
+
+	/* Verify that the vyte vector fits a 16-bit number */
+	if (ctx.bytecode.len > UINT16_MAX) {
+		send_error(&tok.pos, ERR,
+			"processor too complex; bytecode generated too large");
+	}
+
+	/* Shrink the byte vector and return the result */
 	bytevec_shrink(&ctx.bytecode);
-	*n = ctx.bytecode.len;
+	*n = here(&ctx);
 	return ctx.bytecode.buf;
 }

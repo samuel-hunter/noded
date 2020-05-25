@@ -154,6 +154,9 @@ typedef enum
 	OP_DIV,
 	OP_MOD,
 
+	OP_JMP,
+	OP_FJMP,
+
 	/* OP_LOAD# should match the number of vars defined in VAR_MAX */
 	OP_LOAD0,
 	OP_LOAD1,
@@ -177,6 +180,8 @@ typedef enum
 	OP_RECV1,
 	OP_RECV2,
 	OP_RECV3,
+
+	OP_HALT,
 } Opcode;
 
 	
@@ -221,6 +226,13 @@ struct ByteVec {
 	size_t cap;
 };
 
+typedef struct AddrVec AddrVec;
+struct AddrVec {
+	uint16_t *buf;
+	size_t len;
+	size_t cap;
+};
+
 
 /* alloc.c */
 
@@ -231,7 +243,7 @@ void *erealloc(void *ptr, size_t size);
 /* compiler.c */
 
 const char *opstr(Opcode op);
-uint8_t *compile(Scanner *s, SymDict *dict, size_t *n);
+uint8_t *compile(Scanner *s, SymDict *dict, uint16_t *n);
 
 
 /* dict.c */
@@ -246,6 +258,13 @@ void clear_dict(SymDict *dict);
 void vprint_error(const char *srcname, FILE *f,
 	const Position *pos, ErrorType type, const char *fmt, va_list ap);
 void send_error(const Position *pos, ErrorType type, const char *fmt, ...);
+
+
+/* parse.c */
+
+uint8_t parse_int(const Token *tok);
+uint8_t parse_escape(const Token *tok, int offset, int *advance, bool *ok);
+uint8_t parse_char(const Token *tok);
 
 
 /* scanner.c */
@@ -267,8 +286,11 @@ const char *tokstr(TokenType type);
 /* vec.c */
 
 void bytevec_append(ByteVec *vec, uint8_t val);
-uint8_t *bytevec_reserve(ByteVec *vec, size_t nmemb);
+size_t bytevec_reserve(ByteVec *vec, size_t nmemb);
 void bytevec_shrink(ByteVec *vec);
+
+void addrvec_append(AddrVec *vec, uint16_t val);
+void addrvec_clear(AddrVec *vec);
 
 
 #endif /* NODED_H */
