@@ -255,9 +255,9 @@ void clear_dict(SymDict *dict);
 
 /* err.c */
 
-void vprint_error(const char *srcname, FILE *f,
-	const Position *pos, ErrorType type, const char *fmt, va_list ap);
+void init_error(FILE *f, char *fname);
 void send_error(const Position *pos, ErrorType type, const char *fmt, ...);
+bool has_errors(void);
 
 
 /* parse.c */

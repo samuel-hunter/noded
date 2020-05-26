@@ -5,37 +5,10 @@
 
 #include "noded.h"
 
-static const int ERROR_MAX = 10;
-
-/* Module-global variables */
-static struct {
-	SymDict dict; /* todo move to main() in the future */
-	char *fname;
-	FILE *f;
-	int nerrors;
+/* TODO move to main() in the future */
+struct {
+	SymDict dict;
 } Globals = {0};
-
-void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vprint_error(Globals.fname, Globals.f, pos, type, fmt, ap);
-	va_end(ap);
-
-	switch (type) {
-	case WARN:
-		break;
-	case ERR:
-		if (++Globals.nerrors > ERROR_MAX)
-			errx(1, "too many errors.");
-		break;
-	case FATAL:
-		/* Fatal errors mean the program should die */
-		errx(1, "fatal error.");
-		break;
-	}
-}
 
 /* Print disassembled code */
 void disasm(uint8_t *bytecode, uint16_t n)
@@ -84,7 +57,7 @@ static void report_processor(Scanner *s)
 		 * send_error() automatically exits */
 		bytecode = compile(s, &Globals.dict, &n);
 
-		if (Globals.nerrors == 0) {
+		if (!has_errors()) {
 			printf("Processor %s:\n", name.lit);
 			disasm(bytecode, n);
 		}
@@ -151,16 +124,19 @@ static void report_wire(Scanner *s)
 int main(int argc, char *argv[])
 {
 	Scanner s;
+	char *fname;
+	FILE *f;
 
 	if (argc != 2)
 		errx(1, "usage: %s file", argv[0]);
 
-	Globals.fname = argv[1];
-	Globals.f = fopen(Globals.fname, "r");
-	if (Globals.f == NULL)
+	fname = argv[1];
+	f = fopen(fname, "r");
+	if (f == NULL)
 		err(1, "%s", argv[1]);
 
-	init_scanner(&s, Globals.f);
+	init_error(f, fname);
+	init_scanner(&s, f);
 	while (peektype(&s) != TOK_EOF) {
 		switch (peektype(&s)) {
 		case PROCESSOR:
@@ -182,6 +158,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	fclose(Globals.f);
-	return Globals.nerrors ? 1 : 0;
+	fclose(f);
+	return has_errors() ? 1 : 0;
 }

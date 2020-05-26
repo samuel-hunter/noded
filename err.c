@@ -11,6 +11,7 @@
  * in their own way, e.g. the tests can immediately exit on the first
  * error.
  */
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,13 +22,28 @@
 #define BOLD  "\033[1m"
 #define RED   "\033[31m"
 
-void vprint_error(const char *srcname, FILE *f, const Position *pos,
-	ErrorType type, const char *fmt, va_list ap)
+static const int ERROR_MAX = 10;
+
+/* Module-global variables */
+static struct {
+	char *fname;
+	FILE *f;
+	int nerrors;
+} Globals = {0};
+
+void init_error(FILE *f, char *fname)
+{
+	Globals.f = f;
+	Globals.fname = fname;
+}
+
+void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 {
 	const char *typestr = NULL;
 	char *lineptr = NULL;
 	size_t n;
 	long offset;
+	va_list ap;
 
 	fflush(stdout); // Flush stdout so that it doesn't mangle with stderr.
 
@@ -45,27 +61,29 @@ void vprint_error(const char *srcname, FILE *f, const Position *pos,
 
 	if (pos) {
 		fprintf(stderr, BOLD "%s:%d:%d:" RESET " %s ",
-		        srcname, pos->lineno, pos->colno, typestr);
+		        Globals.fname, pos->lineno, pos->colno, typestr);
 	} else {
 		fprintf(stderr, BOLD "%s:" RESET " %s ",
-			srcname, typestr);
+			Globals.fname, typestr);
 	}
 
 	// Print the error
+	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, ".\n");
+	va_end(ap);
 
 	// Skip printing the offending line if we can't seek to it.
-	if (fseek(f, 0, SEEK_CUR) != 0) return;
+	if (fseek(Globals.f, 0, SEEK_CUR) != 0) return;
 
 	// Print the offending line and a caret to its column
-	offset = ftell(f); // preserve seek pos for later.
-	rewind(f);
+	offset = ftell(Globals.f); // preserve seek pos for later.
+	rewind(Globals.f);
 	for (int curline = 0; curline < pos->lineno; curline++) {
-		getline(&lineptr, &n, f);
+		getline(&lineptr, &n, Globals.f);
 	}
 	printf("%s", lineptr);
-	fseek(f, offset, SEEK_SET);
+	fseek(Globals.f, offset, SEEK_SET);
 
 
 	if (lineptr[pos->colno] == '\n') {
@@ -82,4 +100,22 @@ void vprint_error(const char *srcname, FILE *f, const Position *pos,
 		fprintf(stderr, "^\n");
 	}
 	free(lineptr);
+
+	switch (type) {
+	case WARN:
+		break;
+	case ERR:
+		if (++Globals.nerrors > ERROR_MAX)
+			errx(1, "too many errors.");
+		break;
+	case FATAL:
+		/* Fatal errors mean the program should die */
+		errx(1, "fatal error.");
+		break;
+	}
+}
+
+bool has_errors(void)
+{
+	return Globals.nerrors > 0;
 }
