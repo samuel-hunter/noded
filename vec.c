@@ -8,10 +8,14 @@
 
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 
-static size_t VEC_START = 8;
+enum
+{
+	VEC_START = 8,
+};
 
 /* add val to the end of vec */
-void bytevec_append(ByteVec *vec, uint8_t val)
+void
+bytevec_append(ByteVec *vec, uint8_t val)
 {
 	if (vec->len == vec->cap) {
 		vec->cap = vec->cap ? vec->cap*2 : VEC_START;
@@ -22,7 +26,8 @@ void bytevec_append(ByteVec *vec, uint8_t val)
 }
 
 /* reserve nmemb members in vec and return the reserved memory's index */
-size_t bytevec_reserve(ByteVec *vec, size_t nmemb)
+size_t
+bytevec_reserve(ByteVec *vec, size_t nmemb)
 {
 	size_t result;
 
@@ -38,7 +43,8 @@ size_t bytevec_reserve(ByteVec *vec, size_t nmemb)
 }
 
 /* Shrink vec->buf to vec->len members */
-void bytevec_shrink(ByteVec *vec)
+void
+bytevec_shrink(ByteVec *vec)
 {
 	if (vec->len == vec->cap) return;
 	vec->cap = vec->len;
@@ -46,7 +52,8 @@ void bytevec_shrink(ByteVec *vec)
 }
 
 /* Add an address to the vector */
-void addrvec_append(AddrVec *vec, uint16_t val)
+void
+addrvec_append(AddrVec *vec, uint16_t val)
 {
 	if (vec->len == vec->cap) {
 		vec->cap = vec->cap ? vec->cap*2 : VEC_START;
@@ -57,7 +64,8 @@ void addrvec_append(AddrVec *vec, uint16_t val)
 }
 
 /* Free the buffer and set the vec to its zero value */
-void addrvec_clear(AddrVec *vec)
+void
+addrvec_clear(AddrVec *vec)
 {
 	free(vec->buf);
 	memset(vec, 0, sizeof(*vec));

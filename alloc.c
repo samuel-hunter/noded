@@ -19,13 +19,15 @@
 
 #include "noded.h"
 
-static void check_sane_pointer(void *ptr)
+static void
+check_sane_pointer(void *ptr)
 {
 	if (!ptr)
 		err(1, "Out of memory.");
 }
 
-void *ecalloc(size_t nmemb, size_t size)
+void *
+ecalloc(size_t nmemb, size_t size)
 {
 	void *result;
 
@@ -47,7 +49,8 @@ void *ecalloc(size_t nmemb, size_t size)
 	return result;
 }
 
-void *erealloc(void *ptr, size_t size)
+void *
+erealloc(void *ptr, size_t size)
 {
 	void *result;
 

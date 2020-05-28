@@ -31,13 +31,15 @@ static struct {
 	int nerrors;
 } Globals = {0};
 
-void init_error(FILE *f, char *fname)
+void
+init_error(FILE *f, char *fname)
 {
 	Globals.f = f;
 	Globals.fname = fname;
 }
 
-void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
+void
+send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 {
 	const char *typestr = NULL;
 	char *lineptr = NULL;
@@ -45,7 +47,8 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 	long offset;
 	va_list ap;
 
-	fflush(stdout); // Flush stdout so that it doesn't mangle with stderr.
+	/* Flush stdout so that it doesn't mangle with stderr. */
+	fflush(stdout);
 
 	switch (type) {
 	case WARN:
@@ -67,17 +70,17 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 			Globals.fname, typestr);
 	}
 
-	// Print the error
+	/* Print the error */
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, ".\n");
 	va_end(ap);
 
-	// Skip printing the offending line if we can't seek to it.
+	/* Skip printing the offending line if we can't seek to it. */
 	if (fseek(Globals.f, 0, SEEK_CUR) != 0) return;
 
-	// Print the offending line and a caret to its column
-	offset = ftell(Globals.f); // preserve seek pos for later.
+	/* Print the offending line and a caret to its column */
+	offset = ftell(Globals.f); /* preserve seek pos for later. */
 	rewind(Globals.f);
 	for (int curline = 0; curline < pos->lineno; curline++) {
 		getline(&lineptr, &n, Globals.f);
@@ -87,7 +90,7 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 
 
 	if (lineptr[pos->colno] == '\n') {
-		// Error at end of line; don't post caret
+		/* Error at end of line; don't post caret */
 		fprintf(stderr, "\n");
 	} else {
 		for (int i = 0; i < pos->colno; i++) {
@@ -115,7 +118,8 @@ void send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 	}
 }
 
-bool has_errors(void)
+bool
+has_errors(void)
 {
 	return Globals.nerrors > 0;
 }

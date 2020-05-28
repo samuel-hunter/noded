@@ -64,7 +64,8 @@ static TokenRule token_table[UCHAR_MAX+1] = {
 /* non-ascii UTF8 code units always have the highest bit set, giving a
  * signed char a negative value. This is useful if we want to allow
  * utf8 characters as identifiers in our code. */
-static bool isutf8(char c)
+static bool
+isutf8(char c)
 {
 	/* Make EOF an exception to make parsing easier. Not all
          * negative values are UTF8 characters, and EOF isn't the only
@@ -73,13 +74,15 @@ static bool isutf8(char c)
 }
 
 /* Return whether the symbol is a valid identifier character */
-static bool isident(char c)
+static bool
+isident(char c)
 {
 	return isalnum(c) || isutf8(c) || c == '_';
 }
 
 /* Populate the next character in the scanner. */
-static void next(Scanner *s)
+static void
+next(Scanner *s)
 {
 	/* Update linenumber based on current character. */
 	if (s->chr == '\n') {
@@ -92,7 +95,8 @@ static void next(Scanner *s)
 	s->chr = getc(s->f);
 }
 
-void init_scanner(Scanner *scanner, FILE *f)
+void
+init_scanner(Scanner *scanner, FILE *f)
 {
 	memset(scanner, 0, sizeof(*scanner));
 	scanner->f = f;
@@ -105,7 +109,8 @@ void init_scanner(Scanner *scanner, FILE *f)
  * Skip through the source code until it reaches a non-space character
  * or EOF.
  */
-static void skip_space(Scanner *s)
+static void
+skip_space(Scanner *s)
 {
 	while (isspace(s->chr) && s->chr != EOF)
 		next(s);
@@ -115,7 +120,8 @@ static void skip_space(Scanner *s)
  * Skip through the source code if it is at a comment. Return
  * whether it skipped a comment.
  */
-static bool skip_comment(Scanner *s)
+static bool
+skip_comment(Scanner *s)
 {
 	switch (s->chr) {
 	case '/':
@@ -150,7 +156,8 @@ static bool skip_comment(Scanner *s)
  * LITERAL_MAX+1 bytes. If the length of the identifier is beyond
  * LITERAL_MAX, mark s.err.
  */
-static void scan_identifier(Scanner *s, char *dest)
+static void
+scan_identifier(Scanner *s, char *dest)
 {
 	size_t len = 0;
 	while (isident(s->chr)) {
@@ -173,7 +180,8 @@ exit:
  * LITERAL_MAX+1 bytes. If the length of the literal is beyond LITERAL_MAX,
  * mark s.err.
  */
-static void scan_number(Scanner *s, char *dest)
+static void
+scan_number(Scanner *s, char *dest)
 {
 	size_t len = 0;
 	int base = 10;
@@ -242,7 +250,8 @@ exit:
 	*dest = '\0';
 }
 
-static TokenType simple(Scanner *s, char *lit, char c)
+static TokenType
+simple(Scanner *s, char *lit, char c)
 {
 	(void)lit;
 	(void)s;
@@ -250,7 +259,8 @@ static TokenType simple(Scanner *s, char *lit, char c)
 	return token_table[(unsigned char) c].tok0;
 }
 
-static TokenType switch2(Scanner *s, char *lit, char c)
+static TokenType
+switch2(Scanner *s, char *lit, char c)
 {
 	(void)lit;
 	TokenRule *rule = &token_table[(unsigned char) c];
@@ -263,7 +273,8 @@ static TokenType switch2(Scanner *s, char *lit, char c)
 	return rule->tok0;
 }
 
-static TokenType switch3(Scanner *s, char *lit, char c)
+static TokenType
+switch3(Scanner *s, char *lit, char c)
 {
 	(void)lit;
 	TokenRule *rule = &token_table[(unsigned char) c];
@@ -279,7 +290,8 @@ static TokenType switch3(Scanner *s, char *lit, char c)
 	return rule->tok0;
 }
 
-static TokenType switch4(Scanner *s, char *lit, char c)
+static TokenType
+switch4(Scanner *s, char *lit, char c)
 {
 	(void)lit;
 	TokenRule *rule = &token_table[(unsigned char) c];
@@ -301,14 +313,16 @@ static TokenType switch4(Scanner *s, char *lit, char c)
 	return rule->tok0;
 }
 
-static TokenType var(Scanner *s, char *lit, char c)
+static TokenType
+var(Scanner *s, char *lit, char c)
 {
 	(void)c;
 	scan_identifier(s, lit);
 	return VARIABLE;
 }
 
-static TokenType port(Scanner *s, char *lit, char c)
+static TokenType
+port(Scanner *s, char *lit, char c)
 {
 	if (isident(s->chr)) {
 		scan_identifier(s, lit);
@@ -323,7 +337,8 @@ static TokenType port(Scanner *s, char *lit, char c)
  * single-quotes. Assumes `dest` has the length LITERAL_MAX+1. If the
  * literal is greater than LITERAL_MAX, mark the error.
  */
-static TokenType char_(Scanner *s, char *lit, char c)
+static TokenType
+char_(Scanner *s, char *lit, char c)
 {
 	(void)c;
 	size_t len = 0;
@@ -358,7 +373,8 @@ static TokenType char_(Scanner *s, char *lit, char c)
  * quotes. Assumes `dest` has the length LITERAL_MAX+1. If the literal
  * is greater than LITERAL_MAX, populate s.err.
  */
-static TokenType string(Scanner *s, char *lit, char c)
+static TokenType
+string(Scanner *s, char *lit, char c)
 {
 	(void)c;
 	size_t len = 0;
@@ -388,7 +404,8 @@ static TokenType string(Scanner *s, char *lit, char c)
 	return STRING;
 }
 
-static TokenType wire(Scanner *s, char *lit, char c)
+static TokenType
+wire(Scanner *s, char *lit, char c)
 {
 	if (s->chr == '>') {
 		next(s); /* > */
@@ -398,7 +415,8 @@ static TokenType wire(Scanner *s, char *lit, char c)
 	return switch3(s, lit, c);
 }
 
-static TokenType comment(Scanner *s, char *lit, char c)
+static TokenType
+comment(Scanner *s, char *lit, char c)
 {
 	if (skip_comment(s)) {
 		return SCAN_AGAIN;
@@ -407,7 +425,8 @@ static TokenType comment(Scanner *s, char *lit, char c)
 	return switch2(s, lit, c);
 }
 
-static TokenType send(Scanner *s, char *lit, char c)
+static TokenType
+send(Scanner *s, char *lit, char c)
 {
 	if (s->chr == '-') {
 		next(s);
@@ -421,7 +440,8 @@ static TokenType send(Scanner *s, char *lit, char c)
  * Scan the next token and store it in s->current, for the caller to
  * read from directly.
  */
-void scan(Scanner *s, Token *dest) {
+void
+scan(Scanner *s, Token *dest) {
 	TokenType type;
 
 	if (dest == NULL) {
@@ -479,7 +499,8 @@ void scan(Scanner *s, Token *dest) {
 }
 
 /* Set *dest to the next token without consuming it */
-void peek(Scanner *s, Token *dest)
+void
+peek(Scanner *s, Token *dest)
 {
 	if (!s->buffered) {
 		scan(s, &s->peek);
@@ -490,7 +511,8 @@ void peek(Scanner *s, Token *dest)
 }
 
 /* Return the type of the next token without consuming it */
-TokenType peektype(Scanner *s)
+TokenType
+peektype(Scanner *s)
 {
 	Token tok;
 	peek(s, &tok);
@@ -499,7 +521,8 @@ TokenType peektype(Scanner *s)
 
 /* If the next token is expected, write to *dest and consume
  * it. Otherwise, send an error. */
-void expect(Scanner *s, TokenType expected, Token *dest)
+void
+expect(Scanner *s, TokenType expected, Token *dest)
 {
 	Token tok;
 	peek(s, &tok);
@@ -514,7 +537,8 @@ void expect(Scanner *s, TokenType expected, Token *dest)
 }
 
 /* Keep scanning tokens until the next token type is target. */
-void zap_to(Scanner *s, TokenType target)
+void
+zap_to(Scanner *s, TokenType target)
 {
 	while (target != peektype(s))
 		scan(s, NULL);

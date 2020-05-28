@@ -8,7 +8,8 @@
 
 /* Parse a cstring into a uint8 value. Mark an error on boundary
  * issues and invalid literals. */
-uint8_t parse_int(const Token *tok)
+uint8_t
+parse_int(const Token *tok)
 {
 	char *endptr;
 
@@ -31,7 +32,8 @@ uint8_t parse_int(const Token *tok)
 /* Convert an escape sequence into a byte. Write the number of chars
  * to advance into *advance, and whether the parse is successful into
  * *ok. */
-uint8_t parse_escape(const Token *tok, int offset, int *advance, bool *ok)
+uint8_t
+parse_escape(const Token *tok, int offset, int *advance, bool *ok)
 {
 	const char *seq = &tok->lit[offset];
 	size_t len = strlen(seq);
@@ -78,7 +80,7 @@ uint8_t parse_escape(const Token *tok, int offset, int *advance, bool *ok)
 	case '0':
 	case '1':
 	case '2':
-		// Escape sequence \###, ### = octal byte
+		/* Escape sequence \###, ### = octal byte */
 		if (len < 4) {
 			send_error(&tok->pos, ERR,
 			           "escape sequence %s too short", seq);
@@ -123,7 +125,8 @@ uint8_t parse_escape(const Token *tok, int offset, int *advance, bool *ok)
 }
 
 /* Parse a char into a uint8 value. Mark an error on invalid literals. */
-uint8_t parse_char(const Token *tok)
+uint8_t
+parse_char(const Token *tok)
 {
 	size_t len = strlen(tok->lit);
 	uint8_t val;

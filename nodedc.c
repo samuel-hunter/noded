@@ -11,7 +11,8 @@ struct {
 } Globals = {0};
 
 /* Print disassembled code */
-void disasm(uint8_t *bytecode, uint16_t n)
+static void
+disasm(uint8_t *bytecode, uint16_t n)
 {
 	uint16_t addr = 0;
 	while (addr < n) {
@@ -41,7 +42,8 @@ void disasm(uint8_t *bytecode, uint16_t n)
 	printf("\t0x%04x    EOF\n", n);
 }
 
-static void report_processor(Scanner *s)
+static void
+report_processor(Scanner *s)
 {
 	Token name;
 	Token source;
@@ -76,7 +78,8 @@ static void report_processor(Scanner *s)
 	}
 }
 
-static void report_buffer(Scanner *s)
+static void
+report_buffer(Scanner *s)
 {
 	Token name;
 	Token value;
@@ -90,7 +93,8 @@ static void report_buffer(Scanner *s)
 	printf("Buffer %s = \"%s\"\n", name.lit, value.lit);
 }
 
-static void report_stack(Scanner *s)
+static void
+report_stack(Scanner *s)
 {
 	Token name;
 
@@ -101,7 +105,8 @@ static void report_stack(Scanner *s)
 	printf("Stack %s\n", name.lit);
 }
 
-static void report_wire(Scanner *s)
+static void
+report_wire(Scanner *s)
 {
 	Token srcnode;
 	Token srcport;
@@ -121,7 +126,8 @@ static void report_wire(Scanner *s)
 		srcnode.lit, srcport.lit, destnode.lit, destport.lit);
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	Scanner s;
 	char *fname;

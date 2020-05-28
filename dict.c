@@ -13,7 +13,8 @@
 
 #include "noded.h"
 
-static void init(SymDict *dict)
+static void
+init(SymDict *dict)
 {
 	dict->cap = 8;
 	dict->syms = ecalloc(dict->cap, sizeof(*dict->syms));
@@ -25,7 +26,8 @@ static void init(SymDict *dict)
 	sym_id(dict, "");
 }
 
-size_t sym_id(SymDict *dict, const char *sym)
+size_t
+sym_id(SymDict *dict, const char *sym)
 {
 	if (dict->cap == 0)
 		init(dict);
@@ -48,13 +50,15 @@ size_t sym_id(SymDict *dict, const char *sym)
 	return result;
 }
 
-const char *id_sym(const SymDict *dict, size_t id)
+const char
+*id_sym(const SymDict *dict, size_t id)
 {
 	if (id >= dict->len) return NULL;
 	return dict->syms[id];
 }
 
-void clear_dict(SymDict *dict)
+void
+clear_dict(SymDict *dict)
 {
 	for (size_t i = 0; i < dict->len; i++) {
 		free(dict->syms[i]);

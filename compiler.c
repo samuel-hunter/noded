@@ -204,7 +204,8 @@ static const char *opcodes[] = {
 
 /* Return the port# associated with tok's literal, or create a new one
  * if necessary. */
-static int getport(Context *ctx, Token *tok)
+static int
+getport(Context *ctx, Token *tok)
 {
 	size_t id = sym_id(ctx->dict, tok->lit);
 
@@ -226,7 +227,8 @@ static int getport(Context *ctx, Token *tok)
 
 /* Return the variable# associated with tok's literal, or create a new
  * one if necessary. */
-static int getvar(Context *ctx, Token *tok)
+static int
+getvar(Context *ctx, Token *tok)
 {
 	size_t id = sym_id(ctx->dict, tok->lit);
 
@@ -246,24 +248,28 @@ static int getvar(Context *ctx, Token *tok)
 	return ctx->nvars++;
 }
 
-const char *opstr(Opcode op)
+const char *
+opstr(Opcode op)
 {
 	return opcodes[op];
 }
 
-static uint16_t here(const Context *ctx)
+static uint16_t
+here(const Context *ctx)
 {
 	return (uint16_t) ctx->bytecode.len;
 }
 
 /* assemble a no-arg instruction */
-static void asm_op(Context *ctx, Opcode op)
+static void
+asm_op(Context *ctx, Opcode op)
 {
 	bytevec_append(&ctx->bytecode, op);
 }
 
 /* Assemble a push instruction */
-static void asm_push(Context *ctx, uint8_t val)
+static void
+asm_push(Context *ctx, uint8_t val)
 {
 	asm_op(ctx, OP_PUSH);
 	bytevec_append(&ctx->bytecode, val);
@@ -271,7 +277,8 @@ static void asm_push(Context *ctx, uint8_t val)
 
 /* Evaluate an expression type and assemble any leftover instructions
  * to ensure the value of an expression is assembled */
-static void asm_value(Context *ctx, Expression expr, Token *tok)
+static void
+asm_value(Context *ctx, Expression expr, Token *tok)
 {
 	switch (expr.type) {
 	case EXPR_NORMAL:
@@ -290,20 +297,23 @@ static void asm_value(Context *ctx, Expression expr, Token *tok)
 }
 
 /* patch in an address for a jump instruction */
-static void patch_addr(Context *ctx, uint16_t idx, uint16_t addr)
+static void
+patch_addr(Context *ctx, uint16_t idx, uint16_t addr)
 {
 	ctx->bytecode.buf[idx++] = addr & 0xFF;
 	ctx->bytecode.buf[idx++] = addr>>8 & 0xFF;
 }
 
 /* patch in the current address for a jump instruction */
-static void patch_here(Context *ctx, uint16_t idx)
+static void
+patch_here(Context *ctx, uint16_t idx)
 {
 	patch_addr(ctx, idx, here(ctx));
 }
 
 /* assemble a jump instruction with the predetermined address */
-static void asm_jump(Context *ctx, Opcode op, uint16_t addr)
+static void
+asm_jump(Context *ctx, Opcode op, uint16_t addr)
 {
 	asm_op(ctx, op);
 	patch_addr(ctx, (uint16_t) bytevec_reserve(&ctx->bytecode, 2), addr);
@@ -311,14 +321,16 @@ static void asm_jump(Context *ctx, Opcode op, uint16_t addr)
 
 /* assemble a jump instruction and return a pointer to patch the
  * address later, for use with patch_addr() or patch_here() */
-static uint16_t asm_jump2(Context *ctx, Opcode op)
+static uint16_t
+asm_jump2(Context *ctx, Opcode op)
 {
 	asm_op(ctx, op);
 	return (uint16_t) bytevec_reserve(&ctx->bytecode, 2);
 }
 
 /* push a scope in context, recording breaks and resolving continues */
-static void push_scope(Context *ctx)
+static void
+push_scope(Context *ctx)
 {
 	Scope *scope = ecalloc(1, sizeof(*scope));
 	scope->parent = ctx->scope;
@@ -329,19 +341,22 @@ static void push_scope(Context *ctx)
 
 /* partially assemble a jump outside a scope to be fully resolve when
  * the scope pops */
-static void asm_break(Context *ctx, Opcode op)
+static void
+asm_break(Context *ctx, Opcode op)
 {
 	addrvec_append(&ctx->scope->breaks, asm_jump2(ctx, op));
 }
 
 /* assemble a jump to the beginning of the current scope */
-static void asm_continue(Context *ctx, Opcode op)
+static void
+asm_continue(Context *ctx, Opcode op)
 {
 	asm_jump(ctx, op, ctx->scope->continue_addr);
 }
 
 /* pop a scope from the context, resolving all breaks */
-static void pop_scope(Context *ctx)
+static void
+pop_scope(Context *ctx)
 {
 	Scope *scope = ctx->scope;
 	AddrVec *breaks = &scope->breaks;
@@ -356,7 +371,8 @@ static void pop_scope(Context *ctx)
 }
 
 /* Find or create a Label struct with the appropriate id */
-static Label *find_label(Context *ctx, size_t id)
+static Label *
+find_label(Context *ctx, size_t id)
 {
 	for (size_t i = 0; i < ctx->nlabels; i++) {
 		if (id == ctx->labels[i].id) return &ctx->labels[i];
@@ -375,7 +391,8 @@ static Label *find_label(Context *ctx, size_t id)
 }
 
 /* Record the address of a label to resolve later */
-static void add_label_here(Context *ctx, size_t id)
+static void
+add_label_here(Context *ctx, size_t id)
 {
 	Label *label = find_label(ctx, id);
 	label->defined = true;
@@ -383,7 +400,8 @@ static void add_label_here(Context *ctx, size_t id)
 }
 
 /* Partially assemble a goto to resolve at the end of compilation */
-static void asm_goto(Context *ctx, Token *labeltok)
+static void
+asm_goto(Context *ctx, Token *labeltok)
 {
 	Label *label = find_label(ctx, sym_id(ctx->dict, labeltok->lit));
 	addrvec_append(&label->gotos, asm_jump2(ctx, OP_JMP));
@@ -391,7 +409,8 @@ static void asm_goto(Context *ctx, Token *labeltok)
 }
 
 /* assemble a primary expression */
-static Expression primary(Context *ctx, Token *tok)
+static Expression
+primary(Context *ctx, Token *tok)
 {
 	switch (tok->type) {
 	case NUMBER:
@@ -411,7 +430,8 @@ static Expression primary(Context *ctx, Token *tok)
 }
 
 /* assemble an expression wrapped around a pair of parentheses */
-static Expression group(Context *ctx, Token *tok)
+static Expression
+group(Context *ctx, Token *tok)
 {
 	(void)tok;
 
@@ -422,7 +442,8 @@ static Expression group(Context *ctx, Token *tok)
 }
 
 /* assemble an expression with a prefix operand */
-static Expression prefix(Context *ctx, Token *tok)
+static Expression
+prefix(Context *ctx, Token *tok)
 {
 	Expression base;
 
@@ -475,7 +496,8 @@ static Expression prefix(Context *ctx, Token *tok)
 }
 
 /* assemble a send statement */
-static Expression send(Context *ctx, Expression left, Token *tok)
+static Expression
+send(Context *ctx, Expression left, Token *tok)
 {
 	Expression right = parse_expr(ctx, PREC_SEND);
 
@@ -510,7 +532,8 @@ static Expression send(Context *ctx, Expression left, Token *tok)
 	return (Expression){EXPR_SEND, 0};
 }
 
-static Expression comma(Context *ctx, Expression left, Token *tok)
+static Expression
+comma(Context *ctx, Expression left, Token *tok)
 {
 	(void)tok;
 
@@ -519,7 +542,8 @@ static Expression comma(Context *ctx, Expression left, Token *tok)
 	return parse_expr(ctx, PREC_COMMA);
 }
 
-static Expression binary(Context *ctx, Expression left, Token *tok)
+static Expression
+binary(Context *ctx, Expression left, Token *tok)
 {
 	Expression expr;
 
@@ -593,7 +617,8 @@ static Expression binary(Context *ctx, Expression left, Token *tok)
 	return (Expression){EXPR_NORMAL, 0};
 }
 
-static Expression assign(Context *ctx, Expression left, Token *tok)
+static Expression
+assign(Context *ctx, Expression left, Token *tok)
 {
 	Expression right;
 
@@ -655,7 +680,8 @@ static Expression assign(Context *ctx, Expression left, Token *tok)
 }
 
 /* Compile a conditional expression */
-static Expression cond(Context *ctx, Expression left, Token *tok)
+static Expression
+cond(Context *ctx, Expression left, Token *tok)
 {
 	Expression expr;
 	(void)tok;
@@ -679,7 +705,8 @@ static Expression cond(Context *ctx, Expression left, Token *tok)
 	return (Expression){EXPR_NORMAL, 0};
 }
 
-static Expression postfix(Context *ctx, Expression left, Token *tok)
+static Expression
+postfix(Context *ctx, Expression left, Token *tok)
 {
 	(void)ctx;
 	if (left.type != EXPR_VAR)
@@ -706,7 +733,8 @@ static Expression postfix(Context *ctx, Expression left, Token *tok)
 	return (Expression){EXPR_NORMAL, 0};
 }
 
-static Expression parse_expr(Context *ctx, Precedence prec)
+static Expression
+parse_expr(Context *ctx, Precedence prec)
 {
 	Scanner *s = ctx->s;
 	Token tok;
@@ -737,7 +765,8 @@ static Expression parse_expr(Context *ctx, Precedence prec)
 	return left;
 }
 
-static void parse_branch_stmt(Context *ctx)
+static void
+parse_branch_stmt(Context *ctx)
 {
 	Token cmd;
 	Token label;
@@ -772,7 +801,8 @@ static void parse_branch_stmt(Context *ctx)
 }
 
 /* parse a series of statements enclosed in a block */
-static void parse_block_stmt(Context *ctx)
+static void
+parse_block_stmt(Context *ctx)
 {
 	Scanner *s = ctx->s;
 
@@ -782,7 +812,8 @@ static void parse_block_stmt(Context *ctx)
 	scan(s, NULL);
 }
 
-static void parse_if_stmt(Context *ctx)
+static void
+parse_if_stmt(Context *ctx)
 {
 	Scanner *s = ctx->s;
 	Token tok;
@@ -811,7 +842,8 @@ static void parse_if_stmt(Context *ctx)
 	}
 }
 
-static void parse_for_stmt(Context *ctx)
+static void
+parse_for_stmt(Context *ctx)
 {
 	Scanner *s = ctx->s;
 	Expression expr;
@@ -857,7 +889,8 @@ static void parse_for_stmt(Context *ctx)
 	patch_here(ctx, end_jump);
 }
 
-static void parse_while_stmt(Context *ctx)
+static void
+parse_while_stmt(Context *ctx)
 {
 	Scanner *s = ctx->s;
 	Token start;
@@ -875,7 +908,8 @@ static void parse_while_stmt(Context *ctx)
 	pop_scope(ctx);
 }
 
-static void parse_do_stmt(Context *ctx)
+static void
+parse_do_stmt(Context *ctx)
 {
 	Scanner *s = ctx->s;
 	Token tok;
@@ -899,7 +933,8 @@ static void parse_do_stmt(Context *ctx)
 	expect(s, SEMICOLON, NULL);
 }
 
-static void parse_labeled_stmt(Context *ctx)
+static void
+parse_labeled_stmt(Context *ctx)
 {
 	Scanner *s = ctx->s;
 	Token label;
@@ -909,7 +944,8 @@ static void parse_labeled_stmt(Context *ctx)
 	add_label_here(ctx, sym_id(ctx->dict, label.lit));
 }	
 
-static void parse_expr_stmt(Context *ctx)
+static void
+parse_expr_stmt(Context *ctx)
 {
 	Expression expr = parse_expr(ctx, PREC_NONE);
 	expect(ctx->s, SEMICOLON, NULL);
@@ -919,7 +955,8 @@ static void parse_expr_stmt(Context *ctx)
 		asm_op(ctx, OP_POP);
 }
 
-static void parse_stmt(Context *ctx)
+static void
+parse_stmt(Context *ctx)
 {
 	Token tok;
 	peek(ctx->s, &tok);
@@ -973,7 +1010,8 @@ static void parse_stmt(Context *ctx)
 	}
 }
 
-uint8_t *compile(Scanner *s, SymDict *dict, uint16_t *n)
+uint8_t *
+compile(Scanner *s, SymDict *dict, uint16_t *n)
 {
 	Token tok;
 	Context ctx = {.s = s, .dict = dict};

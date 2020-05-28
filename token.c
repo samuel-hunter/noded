@@ -9,12 +9,13 @@
 
 #include "noded.h"
 
-// Should be in the same exact order as Tokens.
+/* Should be in the same exact order as Tokens
+ * to make reading easier */
 static const char *tokens[] = {
 	[ILLEGAL] = "ILLEGAL",
 	[TOK_EOF] = "EOF",
 
-	// Grammar
+	/* Grammar */
 	[LPAREN] = "(",
 	[RPAREN] = ")",
 	[LBRACE] = "{",
@@ -26,7 +27,7 @@ static const char *tokens[] = {
 	[SEMICOLON] = ";",
 	[WIRE] = "->",
 
-	// Literals
+	/* Literals */
 	[IDENTIFIER] = "IDENTIFIER",
 	[VARIABLE] = "VARIABLE",
 	[PORT] = "PORT",
@@ -34,7 +35,7 @@ static const char *tokens[] = {
 	[CHAR] = "CHAR",
 	[STRING] = "STRING",
 
-	// Operators
+	/* Operators */
 	[SEND] = "<-",
 
 	[ASSIGN] = "=",
@@ -116,9 +117,9 @@ struct {
 	{NULL, ILLEGAL}
 };
 
-// map an identifier to its keyword token or IDENTIFIER if not a
-// keyword.
-TokenType lookup(char ident[])
+/* map an identifier to its keyword token or IDENTIFIER if not a keyword. */
+TokenType
+lookup(char ident[])
 {
 	for (size_t i = 0; keywords[i].literal != NULL; i++) {
 		if (strcmp(keywords[i].literal, ident) == 0)
@@ -128,7 +129,8 @@ TokenType lookup(char ident[])
 	return IDENTIFIER;
 }
 
-const char *tokstr(TokenType type)
+const char *
+tokstr(TokenType type)
 {
 	return tokens[type];
 }
