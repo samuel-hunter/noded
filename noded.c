@@ -11,8 +11,7 @@
 typedef struct CodeDict CodeDict;
 struct CodeDict {
 	size_t *ids;
-	uint8_t **code_blocks;
-	uint16_t *code_sizes;
+	CodeBlock *blocks;
 
 	size_t len;
 	size_t cap;
@@ -21,6 +20,8 @@ struct CodeDict {
 typedef struct NodeRule NodeRule;
 struct NodeRule {
 	NodeType type;
+	size_t ports[PORT_MAX]; /* dict maps sym id to port index for wiring */
+	int nports;
 	union {
 		struct {
 			const uint8_t *code;
@@ -44,34 +45,35 @@ struct WireRule {
 	} nodes[2];
 };
 
-static void
-codedict_add(CodeDict *dict, size_t id,
-	uint8_t *code_block, uint16_t code_size)
+/*
+ * Return a pointer to fill in the code dict. Pointer is valid
+ * until the next call to new_codeblock.
+ */
+static CodeBlock *
+new_codeblock(CodeDict *dict, size_t id)
 {
 	if (dict->len == dict->cap) {
 		dict->cap = dict->cap ? dict->cap*2 : 8;
 		dict->ids = erealloc(dict->ids,
 			dict->cap * sizeof(*dict->ids));
-		dict->code_blocks = erealloc(dict->code_blocks,
-			dict->cap * sizeof(*dict->code_blocks));
-		dict->code_sizes = erealloc(dict->code_sizes,
-			dict->cap * sizeof(*dict->code_sizes));
+		dict->blocks = erealloc(dict->blocks,
+			dict->cap * sizeof(*dict->blocks));
 	}
 
 	dict->ids[dict->len] = id;
-	dict->code_blocks[dict->len] = code_block;
-	dict->code_sizes[dict->len] = code_size;
-	dict->len++;
+	return &dict->blocks[dict->len++];
 }
 
-static uint8_t *
-codedict_find(const CodeDict *dict, size_t id, uint16_t *size)
+/*
+ * Return a pointer to the requested code block. Pointer is
+ * valid until the next call to new_codeblock.
+ */
+static CodeBlock *
+codedict_find(const CodeDict *dict, size_t id)
 {
 	for (size_t i = 0; i < dict->len; i++) {
-		if (dict->ids[i] == id) {
-			*size = dict->code_sizes[i];
-			return dict->code_blocks[i];
-		}
+		if (dict->ids[i] == id)
+			return &dict->blocks[i];
 	}
 
 	return NULL;
@@ -84,8 +86,7 @@ static void
 codedict_clear(CodeDict *dict)
 {
 	free(dict->ids);
-	free(dict->code_blocks);
-	free(dict->code_sizes);
+	free(dict->blocks);
 	memset(dict, 0, sizeof(*dict));
 }
 
@@ -191,8 +192,8 @@ main(int argc, char *argv[])
 	while (peektype(&s) != TOK_EOF && !has_errors()) {
 		Token name;
 		Token source;
-		uint8_t *code_block;
-		uint16_t code_size;
+		CodeBlock block;
+		CodeBlock *match; /* Pointer to the source of the processor's code */
 		NodeRule *rule;
 
 		switch (peektype(&s)) {
@@ -204,15 +205,16 @@ main(int argc, char *argv[])
 			switch (peektype(&s)) {
 			case LBRACE:
 				/* compile it */
-				code_block = compile(&s, &dict, &code_size);
+				compile(&s, &dict, &block);
+				match = &block;
 				break;
 			case ASSIGN:
 				/* find a previous node's code block */
 				expect(&s, ASSIGN, NULL);
 				expect(&s, IDENTIFIER, &source);
 				expect(&s, SEMICOLON, NULL);
-				code_block = codedict_find(&code, sym_id(&dict, source.lit), &code_size);
-				if (!code_block)
+				match = codedict_find(&code, sym_id(&dict, source.lit));
+				if (!match)
 					send_error(&source.pos, ERR, "processor node %s does not exist", source.lit);
 				break;
 			default:
@@ -220,10 +222,13 @@ main(int argc, char *argv[])
 				break;
 			}
 			if (has_errors()) break;
-			codedict_add(&code, sym_id(&dict, name.lit), code_block, code_size);
+
+			memcpy(new_codeblock(&code, sym_id(&dict, name.lit)), match, sizeof(*match));
 			rule->type = PROC_NODE;
-			rule->proc.code = code_block;
-			rule->proc.code_size = code_size;
+			memcpy(rule->ports, match->ports, sizeof(match->ports));
+			rule->nports = match->nports;
+			rule->proc.code = match->code;
+			rule->proc.code_size = match->size;
 			break;
 		case BUFFER:
 			skip_buffer(&s);

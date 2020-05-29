@@ -16,11 +16,11 @@ struct {
 
 /* Print disassembled code */
 static void
-disasm(uint8_t *bytecode, uint16_t n)
+disasm(CodeBlock *block)
 {
 	uint16_t addr = 0;
-	while (addr < n) {
-		uint8_t *instr = &bytecode[addr];
+	while (addr < block->size) {
+		uint8_t *instr = &block->code[addr];
 		int advance = 1;
 		uint16_t jmpaddr;
 
@@ -43,7 +43,7 @@ disasm(uint8_t *bytecode, uint16_t n)
 
 		addr += advance;
 	}
-	printf("\t0x%04x    EOF\n", n);
+	printf("\t0x%04x    EOF\n", block->size);
 }
 
 static void
@@ -51,8 +51,7 @@ report_processor(Scanner *s)
 {
 	Token name;
 	Token source;
-	uint16_t n;
-	uint8_t *bytecode;
+	CodeBlock block;
 
 	expect(s, PROCESSOR, NULL);
 	expect(s, IDENTIFIER, &name);
@@ -61,14 +60,12 @@ report_processor(Scanner *s)
 	case LBRACE:
 		/* assumes compile returns non-NULL because
 		 * send_error() automatically exits */
-		bytecode = compile(s, &Globals.dict, &n);
+		compile(s, &Globals.dict, &block);
+		if (has_errors()) break;
 
-		if (!has_errors()) {
-			printf("Processor %s:\n", name.lit);
-			disasm(bytecode, n);
-		}
-
-		free(bytecode);
+		printf("Processor %s:\n", name.lit);
+		disasm(&block);
+		free(block.code);
 		break;
 	case ASSIGN:
 		scan(s, NULL);

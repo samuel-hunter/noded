@@ -2,6 +2,7 @@
  * compiler - directly compiler tokens into bytecode
  */
 #include <stdlib.h>
+#include <string.h>
 
 #include "noded.h"
 
@@ -1010,8 +1011,8 @@ parse_stmt(Context *ctx)
 	}
 }
 
-uint8_t *
-compile(Scanner *s, SymDict *dict, uint16_t *n)
+void
+compile(Scanner *s, SymDict *dict, CodeBlock *block)
 {
 	Token tok;
 	Context ctx = {.s = s, .dict = dict};
@@ -1034,14 +1035,18 @@ compile(Scanner *s, SymDict *dict, uint16_t *n)
 	}
 	free(ctx.labels);
 
-	/* Verify that the vyte vector fits a 16-bit number */
+	/* Verify that the byte vector fits a 16-bit number */
 	if (ctx.bytecode.len > UINT16_MAX) {
 		send_error(&tok.pos, ERR,
 			"processor too complex; bytecode generated too large");
 	}
 
+	/* Record all port IDs */
+	memcpy(block->ports, ctx.ports, sizeof(ctx.ports));
+	block->nports = ctx.nports;
+
 	/* Shrink the byte vector and return the result */
 	bytevec_shrink(&ctx.bytecode);
-	*n = here(&ctx);
-	return ctx.bytecode.buf;
+	block->size = here(&ctx);
+	block->code = ctx.bytecode.buf;
 }

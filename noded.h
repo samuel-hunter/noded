@@ -233,6 +233,14 @@ struct AddrVec {
 	size_t cap;
 };
 
+typedef struct CodeBlock CodeBlock;
+struct CodeBlock {
+	uint8_t *code;
+	uint8_t size;
+	size_t ports[PORT_MAX];
+	int nports;
+};
+
 typedef enum
 {
 	IO_NODE,
@@ -251,7 +259,7 @@ void *erealloc(void *ptr, size_t size);
 /* compiler.c */
 
 const char *opstr(Opcode op);
-uint8_t *compile(Scanner *s, SymDict *dict, uint16_t *n);
+void compile(Scanner *s, SymDict *dict, CodeBlock *block);
 
 
 /* dict.c */
