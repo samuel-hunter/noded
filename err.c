@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "noded.h"
 
@@ -38,6 +39,24 @@ init_error(FILE *f, const char *fname)
 	Globals.fname = fname;
 }
 
+/*
+ * Use heuristics to return whether printing color
+ * control characters is appropriate.
+ *
+ * TODO add command flags to force enable/disable.
+ */
+static bool
+iscolor(void)
+{
+	/* If stringmatching `xterm-color` and `*-256color` is good enough for
+	 * Debian's .bashrc, then stringmatching `*color*` should be a good
+     * enough heuristic for detecting a color terminal without using
+     * ioctl or tput magic.
+     */
+	return isatty(STDERR_FILENO) &&
+		strstr(getenv("TERM"), "color");
+}
+
 void
 send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 {
@@ -55,19 +74,23 @@ send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 		typestr = "warning:";
 		break;
 	case ERR:
-		typestr = RED "error:" RESET;
+		typestr = iscolor() ? (RED "error:" RESET) : "error:";
 		break;
 	case FATAL:
-		typestr = RED "FATAL:" RESET;
+		typestr = iscolor() ? (RED "FATAL:" RESET) : "FATAL:";
 		break;
 	}
 
 	if (pos) {
-		fprintf(stderr, BOLD "%s:%d:%d:" RESET " %s ",
-		        Globals.fname, pos->lineno, pos->colno, typestr);
+		const char *fmt = iscolor() ?
+			(BOLD "%s:%d:%d:" RESET " %s ") :
+			"%s:%d:%d: %s ";
+		fprintf(stderr, fmt, Globals.fname, pos->lineno, pos->colno, typestr);
 	} else {
-		fprintf(stderr, BOLD "%s:" RESET " %s ",
-			Globals.fname, typestr);
+		const char *fmt = iscolor() ?
+			(BOLD "%s:" RESET " %s ") :
+			"%s: %s ";
+		fprintf(stderr, fmt, Globals.fname, typestr);
 	}
 
 	/* Print the error */
