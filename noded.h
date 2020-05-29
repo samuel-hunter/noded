@@ -233,6 +233,14 @@ struct AddrVec {
 	size_t cap;
 };
 
+typedef enum
+{
+	IO_NODE,
+	PROC_NODE,
+	BUFFER_NODE,
+	STACK_NODE,
+} NodeType;
+
 
 /* alloc.c */
 
