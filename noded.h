@@ -255,7 +255,7 @@ void clear_dict(SymDict *dict);
 
 /* err.c */
 
-void init_error(FILE *f, char *fname);
+void init_error(FILE *f, const char *fname);
 void send_error(const Position *pos, ErrorType type, const char *fmt, ...);
 bool has_errors(void);
 

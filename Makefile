@@ -1,7 +1,12 @@
 
 CFLAGS := -Werror -Wall -Wextra -Wpedantic -g
 LDFLAGS :=
-RM ?= rm -f
+TARGS := noded nodedc
+
+all: $(TARGS)
+
+noded: alloc.o compiler.o dict.o err.o noded.o parse.o scanner.o token.o vec.o
+	$(CC) $(LDFLAGS) -o $@ $^
 
 nodedc: alloc.o compiler.o dict.o err.o nodedc.o parse.o scanner.o token.o vec.o
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -10,4 +15,4 @@ nodedc: alloc.o compiler.o dict.o err.o nodedc.o parse.o scanner.o token.o vec.o
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	$(RM) *.o nodedc
+	rm -f *.o $(TARGS)

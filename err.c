@@ -26,13 +26,13 @@ static const int ERROR_MAX = 10;
 
 /* Module-global variables */
 static struct {
-	char *fname;
+	const char *fname;
 	FILE *f;
 	int nerrors;
 } Globals = {0};
 
 void
-init_error(FILE *f, char *fname)
+init_error(FILE *f, const char *fname)
 {
 	Globals.f = f;
 	Globals.fname = fname;

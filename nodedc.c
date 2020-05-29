@@ -1,3 +1,7 @@
+/*
+ * nodedc - complement program to print a breakdown of a program's structure,
+ * as well as reporting the disassembled bytecode.
+ */
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
