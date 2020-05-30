@@ -8,25 +8,12 @@
 
 #include "noded.h"
 
-typedef struct CodeDict CodeDict;
-struct CodeDict {
-	size_t *ids;
-	CodeBlock *blocks;
-
-	size_t len;
-	size_t cap;
-};
-
 typedef struct NodeRule NodeRule;
 struct NodeRule {
 	NodeType type;
-	size_t ports[PORT_MAX]; /* dict maps sym id to port index for wiring */
-	int nports;
+	size_t id;
 	union {
-		struct {
-			const uint8_t *code;
-			uint16_t code_size;
-		} proc;
+		CodeBlock proc;
 	};
 };
 
@@ -46,64 +33,76 @@ struct WireRule {
 };
 
 /*
- * Return a pointer to fill in the code dict. Pointer is valid
- * until the next call to new_codeblock.
- */
-static CodeBlock *
-new_codeblock(CodeDict *dict, size_t id)
-{
-	if (dict->len == dict->cap) {
-		dict->cap = dict->cap ? dict->cap*2 : 8;
-		dict->ids = erealloc(dict->ids,
-			dict->cap * sizeof(*dict->ids));
-		dict->blocks = erealloc(dict->blocks,
-			dict->cap * sizeof(*dict->blocks));
-	}
-
-	dict->ids[dict->len] = id;
-	return &dict->blocks[dict->len++];
-}
-
-/*
- * Return a pointer to the requested code block. Pointer is
- * valid until the next call to new_codeblock.
- */
-static CodeBlock *
-codedict_find(const CodeDict *dict, size_t id)
-{
-	for (size_t i = 0; i < dict->len; i++) {
-		if (dict->ids[i] == id)
-			return &dict->blocks[i];
-	}
-
-	return NULL;
-}
-
-/* Free the memory of the entire code dictionary, *except* for
- * the individual code blocks.
- */
-static void
-codedict_clear(CodeDict *dict)
-{
-	free(dict->ids);
-	free(dict->blocks);
-	memset(dict, 0, sizeof(*dict));
-}
-
-/*
  * Return a pointer to a new node rule. This pointer
  * is valid until the next `new_noderule` call.
  */
 static NodeRule *
-new_noderule(NodeRuleVec *vec)
+new_noderule(NodeRuleVec *vec, NodeType type, size_t id)
 {
+	NodeRule *rule;
+
 	if (vec->cap == vec->len) {
 		vec->cap = vec->cap ? vec->cap*2 : 8;
 		vec->rules = erealloc(vec->rules,
 			vec->cap * sizeof(*vec->rules));
 	}
 
-	return &vec->rules[vec->len++];
+	rule = &vec->rules[vec->len++];
+	rule->type = type;
+	rule->id = id;
+	return rule;
+}
+
+/*
+ * Return a pointer to the target node rule, or
+ * NULL if it doesn't exist. This pointer is valid
+ * until the next `new_noderule` call.
+ */
+static NodeRule *
+find_noderule(NodeRuleVec *vec, size_t id)
+{
+	for (size_t i = 0; i < vec->len; i++) {
+		if (vec->rules[i].id == id)
+			return &vec->rules[i];
+	}
+
+	return NULL;
+}
+
+static void
+add_processor(Scanner *s, NodeRuleVec *rules, SymDict *dict)
+{
+	Token name, source;
+	NodeRule *rule, *source_rule;
+
+	expect(s, PROCESSOR, NULL);
+	expect(s, IDENTIFIER, &name);
+	/* Either compile the code block, or piggyback off of another node's code. */
+	switch (peektype(s)) {
+	case LBRACE:
+		/* compile it */
+		rule = new_noderule(rules, PROC_NODE, sym_id(dict, name.lit));
+		compile(s, dict, &rule->proc);
+		break;
+	case ASSIGN:
+		/* find a previous node's code block */
+		expect(s, ASSIGN, NULL);
+		expect(s, IDENTIFIER, &source);
+		expect(s, SEMICOLON, NULL);
+
+		source_rule = find_noderule(rules, sym_id(dict, source.lit));
+		if (source_rule) {
+			rule = new_noderule(rules, PROC_NODE, sym_id(dict, name.lit));
+			compile(s, dict, &rule->proc);
+		} else {
+			send_error(&source.pos, ERR,
+				"processor node %s does not exist", source.lit);
+		}
+		break;
+	default:
+		send_error(&source.pos, ERR, "unexpected token %s", tokstr(peektype(s)));
+		break;
+	}
 }
 
 /*
@@ -170,7 +169,6 @@ main(int argc, char *argv[])
 	Scanner s;
 
 	SymDict dict = {0};
-	CodeDict code = {0};
 	NodeRuleVec rules = {0};
 	
 	/* WireRule *wires = NULL; */
@@ -190,45 +188,9 @@ main(int argc, char *argv[])
 	init_error(f, fname);
 	init_scanner(&s, f);
 	while (peektype(&s) != TOK_EOF && !has_errors()) {
-		Token name;
-		Token source;
-		CodeBlock block;
-		CodeBlock *match; /* Pointer to the source of the processor's code */
-		NodeRule *rule;
-
 		switch (peektype(&s)) {
 		case PROCESSOR:
-			expect(&s, PROCESSOR, NULL);
-			expect(&s, IDENTIFIER, &name);
-			rule = new_noderule(&rules);
-			/* Either compile the code block, or piggyback off of another node's code. */
-			switch (peektype(&s)) {
-			case LBRACE:
-				/* compile it */
-				compile(&s, &dict, &block);
-				match = &block;
-				break;
-			case ASSIGN:
-				/* find a previous node's code block */
-				expect(&s, ASSIGN, NULL);
-				expect(&s, IDENTIFIER, &source);
-				expect(&s, SEMICOLON, NULL);
-				match = codedict_find(&code, sym_id(&dict, source.lit));
-				if (!match)
-					send_error(&source.pos, ERR, "processor node %s does not exist", source.lit);
-				break;
-			default:
-				send_error(&source.pos, ERR, "unexpected token %s", tokstr(peektype(&s)));
-				break;
-			}
-			if (has_errors()) break;
-
-			memcpy(new_codeblock(&code, sym_id(&dict, name.lit)), match, sizeof(*match));
-			rule->type = PROC_NODE;
-			memcpy(rule->ports, match->ports, sizeof(match->ports));
-			rule->nports = match->nports;
-			rule->proc.code = match->code;
-			rule->proc.code_size = match->size;
+			add_processor(&s, &rules, &dict);
 			break;
 		case BUFFER:
 			skip_buffer(&s);
@@ -256,7 +218,6 @@ main(int argc, char *argv[])
 
 	/* Clean up some (but not all) memory */
 	clear_noderules(&rules);
-	codedict_clear(&code);
 	clear_dict(&dict);
 
 	return 0;

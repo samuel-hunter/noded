@@ -237,6 +237,7 @@ typedef struct CodeBlock CodeBlock;
 struct CodeBlock {
 	uint8_t *code;
 	uint8_t size;
+
 	size_t ports[PORT_MAX];
 	int nports;
 };
