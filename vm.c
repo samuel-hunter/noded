@@ -41,9 +41,9 @@ struct BufNode {
 
 typedef struct StackNode StackNode;
 struct StackNode {
-	size_t size;
-	/* TODO: dynamically grow the stack */
-	uint8_t stack[STACK_SIZE];
+	uint8_t *stack;
+	size_t len;
+	size_t cap;
 };
 
 typedef bool (*Sendlet)(Wire *wire, void *recp, int port, uint8_t dat);
@@ -287,12 +287,13 @@ static bool send_stack(Wire *wire, void *recp, int port, uint8_t dat)
 	(void)port;
 	StackNode *stack = recp;
 
-	if (stack->size < sizeof(stack->stack)) {
-		stack->stack[stack->size++] = dat;
-		return true;
-	} else {
-		return false;
+	if (stack->cap == stack->len) {
+		stack->cap = stack->cap ? stack->cap*2 : 8;
+		stack->stack = erealloc(stack->stack, stack->cap);
 	}
+
+	stack->stack[stack->len++] = dat;
+	return true;
 }
 
 static bool recv_stack(Wire *wire, void *recp, int port, uint8_t *dest)
@@ -301,8 +302,8 @@ static bool recv_stack(Wire *wire, void *recp, int port, uint8_t *dest)
 	(void)port;
 	StackNode *stack = recp;
 
-	if (stack->size > 0) {
-		*dest = stack->stack[--stack->size];
+	if (stack->len > 0) {
+		*dest = stack->stack[--stack->len];
 		return true;
 	} else {
 		return false;
