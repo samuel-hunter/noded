@@ -12,5 +12,5 @@ buffer message = "こんにちは  你好\n";
 
 
 こんにちは.idx -> message.idx;
-message.elm -> report.in;
+message.elm -> こんにちは.in;
 こんにちは.out -> io.out;
