@@ -33,8 +33,21 @@ struct ProcNode {
 	uint8_t *sp; /* sp = &stack[i] */
 };
 
-typedef bool (*Sendlet)(Wire *wire, Node *recp, int port, uint8_t dat);
-typedef bool (*Recvlet)(Wire *wire, Node *recp, int port, uint8_t *dest);
+typedef struct BufNode BufNode;
+struct BufNode {
+	uint8_t idx;
+	uint8_t data[BUFFER_NODE_MAX];
+};
+
+typedef struct StackNode StackNode;
+struct StackNode {
+	size_t size;
+	/* TODO: dynamically grow the stack */
+	uint8_t stack[STACK_SIZE];
+};
+
+typedef bool (*Sendlet)(Wire *wire, void *recp, int port, uint8_t dat);
+typedef bool (*Recvlet)(Wire *wire, void *recp, int port, uint8_t *dest);
 
 typedef struct PortRule PortRule;
 struct PortRule {
@@ -42,14 +55,20 @@ struct PortRule {
 	Recvlet recv;
 };
 
-static bool send_proc(Wire *wire, Node *recp, int port, uint8_t dat);
-static bool recv_proc(Wire *wire, Node *recp, int port, uint8_t *dest);
-static bool send_io(Wire *wire, Node *recp, int port, uint8_t dat);
-static bool recv_io(Wire *wire, Node *recp, int port, uint8_t *dest);
+static bool send_proc(Wire *wire, void *recp, int port, uint8_t dat);
+static bool recv_proc(Wire *wire, void *recp, int port, uint8_t *dest);
+static bool send_io(Wire *wire, void *recp, int port, uint8_t dat);
+static bool recv_io(Wire *wire, void *recp, int port, uint8_t *dest);
+static bool send_buf(Wire *wire, void *recp, int port, uint8_t dat);
+static bool recv_buf(Wire *wire, void *recp, int port, uint8_t *dest);
+static bool send_stack(Wire *wire, void *recp, int port, uint8_t dat);
+static bool recv_stack(Wire *wire, void *recp, int port, uint8_t *dest);
 
 static PortRule port_table[] = {
-	[PROC_NODE] = {&send_proc, &recv_proc},
-	[IO_NODE]   = {&send_io,   &recv_io},
+	[PROC_NODE]   = {&send_proc,  &recv_proc},
+	[IO_NODE]     = {&send_io,    &recv_io},
+	[BUFFER_NODE] = {&send_buf,   &recv_buf},
+	[STACK_NODE]  = {&send_stack, &recv_stack},
 };
 
 void
@@ -104,6 +123,24 @@ copy_proc_node(VM *vm, size_t source_node)
 	add_proc_node(vm, source->code, size);
 }
 
+void
+add_buf_node(VM *vm, const uint8_t data[])
+{
+	Node *node = add_node(vm, BUFFER_NODE);
+	BufNode *buf = ecalloc(1, sizeof(*buf));
+	node->dat = buf;
+
+	memcpy(buf->data, data, sizeof(buf->data));
+}
+
+void
+add_stack_node(VM *vm)
+{
+	Node *node = add_node(vm, STACK_NODE);
+	StackNode *stack = ecalloc(1, sizeof(*stack));
+	node->dat = stack;
+}
+
 static void
 add_wire_to_port(Port *port, Wire *wire, Node *recp, int recp_port)
 {
@@ -139,7 +176,7 @@ add_wire(VM *vm, size_t node1, int port1, size_t node2, int port2)
 }
 
 static bool
-send_proc(Wire *wire, Node *recp, int port, uint8_t dat)
+send_proc(Wire *wire, void *recp, int port, uint8_t dat)
 {
 	(void)recp;
 	(void)port;
@@ -160,7 +197,7 @@ send_proc(Wire *wire, Node *recp, int port, uint8_t dat)
 }
 
 static bool
-recv_proc(Wire *wire, Node *recp, int port, uint8_t *dest)
+recv_proc(Wire *wire, void *recp, int port, uint8_t *dest)
 {
 	(void)recp;
 	(void)port;
@@ -179,7 +216,7 @@ recv_proc(Wire *wire, Node *recp, int port, uint8_t *dest)
 }
 
 static bool
-send_io(Wire *wire, Node *recp, int port, uint8_t dat)
+send_io(Wire *wire, void *recp, int port, uint8_t dat)
 {
 	(void)wire;
 	(void)recp;
@@ -190,7 +227,7 @@ send_io(Wire *wire, Node *recp, int port, uint8_t dat)
 }
 
 static bool
-recv_io(Wire *wire, Node *recp, int port, uint8_t *dest)
+recv_io(Wire *wire, void *recp, int port, uint8_t *dest)
 {
 	(void)wire;
 	(void)recp;
@@ -206,18 +243,85 @@ recv_io(Wire *wire, Node *recp, int port, uint8_t *dest)
 	}
 }
 
+static bool send_buf(Wire *wire, void *recp, int port, uint8_t dat)
+{
+	(void)wire;
+	BufNode *buf = recp;
+
+	switch (port) {
+	case BUFFER_IDX:
+		buf->idx = dat;
+		break;
+	case BUFFER_ELM:
+		buf->data[buf->idx] = dat;
+		break;
+	default:
+		errx(1, "send_buf(): invalid port %d.", port);
+	}
+
+	return true;
+}
+
+static bool recv_buf(Wire *wire, void *recp, int port, uint8_t *dest)
+{
+	(void)wire;
+	BufNode *buf = recp;
+
+	switch (port) {
+	case BUFFER_IDX:
+		*dest = buf->idx;
+		break;
+	case BUFFER_ELM:
+		*dest = buf->data[buf->idx];
+		break;
+	default:
+		errx(1, "send_buf(): invalid port %d.", port);
+	}
+
+	return true;
+}
+
+static bool send_stack(Wire *wire, void *recp, int port, uint8_t dat)
+{
+	(void)wire;
+	(void)port;
+	StackNode *stack = recp;
+
+	if (stack->size < sizeof(stack->stack)) {
+		stack->stack[stack->size++] = dat;
+		return true;
+	} else {
+		return false;
+	}
+}
+
+static bool recv_stack(Wire *wire, void *recp, int port, uint8_t *dest)
+{
+	(void)wire;
+	(void)port;
+	StackNode *stack = recp;
+
+	if (stack->size > 0) {
+		*dest = stack->stack[--stack->size];
+		return true;
+	} else {
+		return false;
+	}
+}
+
+
 static bool
 send(Port *port, uint8_t dat)
 {
 	Sendlet snd = port_table[port->recp->type].send;
-	return snd(port->wire, port->recp, port->recp_port, dat);
+	return snd(port->wire, port->recp->dat, port->recp_port, dat);
 }
 
 static bool
 recv(Port *port, uint8_t *dest)
 {
 	Recvlet rcv = port_table[port->recp->type].recv;
-	return rcv(port->wire, port->recp, port->recp_port, dest);
+	return rcv(port->wire, port->recp->dat, port->recp_port, dest);
 }
 
 static void

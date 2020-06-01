@@ -144,6 +144,7 @@ scan_processor(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules
 		if (source_rule) {
 			copy_proc_node(vm, rule_idx(rules, nrules, source_id));
 			if (!has_errors()) {
+				/* This node has the same exact rules as the previous node. */
 				*rule = *source_rule;
 				rule->id = sym_id(dict, name.lit);
 			}
@@ -155,6 +156,59 @@ scan_processor(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules
 		send_error(&s->peek.pos, ERR,
 			"unexpected token %s", tokstr(s->peek.type));
 	}
+}
+
+static void
+scan_buffer(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
+{
+	Token name, value;
+	uint8_t dat[BUFFER_NODE_MAX];
+	NodeRule *rule;
+
+	size_t ports[] = {
+		[BUFFER_ELM] = sym_id(dict, "elm"),
+		[BUFFER_IDX] = sym_id(dict, "idx"),
+	};
+
+	expect(s, BUFFER, NULL);
+	expect(s, IDENTIFIER, &name);
+	expect(s, ASSIGN, NULL);
+	expect(s, STRING, &value);
+	expect(s, SEMICOLON, NULL);
+
+	/* Add the buffer to the VM */
+	parse_string(dat, &value);
+	add_buf_node(vm, dat);
+
+	/* Set up the rules for wiring */
+	rule = &rules[nrules];
+	rule->id = sym_id(dict, name.lit);
+	memcpy(rule->ports, ports, sizeof(ports));
+	rule->nports = sizeof(ports)/sizeof(*ports);
+}
+
+static void
+scan_stack(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
+{
+	Token name;
+	NodeRule *rule;
+
+	size_t ports[] = {
+		[STACK_ELM] = sym_id(dict, "elm"),
+	};
+
+	expect(s, STACK, NULL);
+	expect(s, IDENTIFIER, &name);
+	expect(s, SEMICOLON, NULL);
+
+	/* Add the stack to the VM */
+	add_stack_node(vm);
+
+	/* Set up the rules for wiring */
+	rule = &rules[nrules];
+	rule->id = sym_id(dict, name.lit);
+	memcpy(rule->ports, ports, sizeof(ports));
+	rule->nports = sizeof(ports)/sizeof(*ports);
 }
 
 static void
@@ -268,12 +322,15 @@ main(int argc, char *argv[])
 
 	/* begin with adding the IO node */
 	{
-		size_t io_ports[PORT_MAX] = {sym_id(&dict, "in"), sym_id(&dict, "out")};
+		size_t io_ports[] = {
+			[IO_IN] = sym_id(&dict, "in"),
+			[IO_OUT] = sym_id(&dict, "out"),
+		};
 		NodeRule *rule = &rules[nodes_parsed++];
 
 		rule->id = sym_id(&dict, "io");
-		memcpy(rule->ports, io_ports, sizeof(rule->ports));
-		rule->nports = 2;
+		memcpy(rule->ports, io_ports, sizeof(io_ports));
+		rule->nports = sizeof(io_ports)/sizeof(*io_ports);
 
 		add_io_node(&vm);
 	}
@@ -285,12 +342,16 @@ main(int argc, char *argv[])
 			scan_processor(&s, &dict, &vm, rules, nodes_parsed);
 			nodes_parsed++;
 			break;
+		case BUFFER:
+			scan_buffer(&s, &dict, &vm, rules, nodes_parsed);
+			nodes_parsed++;
+			break;
+		case STACK:
+			scan_stack(&s, &dict, &vm, rules, nodes_parsed);
+			nodes_parsed++;
+			break;
 		case IDENTIFIER:
 			scan_wire(&s, &dict, &vm, rules, nodes_parsed);
-			break;
-		case BUFFER:
-		case STACK:
-			send_error(&s.peek.pos, ERR, "unimplemented node");
 			break;
 		default:
 			send_error(&s.peek.pos, ERR,

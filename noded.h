@@ -259,6 +259,17 @@ typedef enum
 
 typedef enum
 {
+	BUFFER_ELM,
+	BUFFER_IDX,
+} BufferPorts;
+
+typedef enum
+{
+	STACK_ELM,
+} StackPorts;
+
+typedef enum
+{
 	EMPTY,
 	FULL,
 	CONSUMED,
@@ -316,8 +327,8 @@ bool has_errors(void);
 /* parse.c */
 
 uint8_t parse_int(const Token *tok);
-uint8_t parse_escape(const Token *tok, int offset, int *advance, bool *ok);
 uint8_t parse_char(const Token *tok);
+void parse_string(uint8_t dest[], const Token *tok);
 
 
 /* scanner.c */
@@ -352,7 +363,7 @@ void vm_init(VM *vm, size_t nnodes, size_t nwires);
 void add_io_node(VM *vm);
 void add_proc_node(VM *vm, const uint8_t *code, uint16_t code_size);
 void copy_proc_node(VM *vm, size_t source_node);
-void add_buf_node(VM *vm);
+void add_buf_node(VM *vm, const uint8_t dat[]);
 void add_stack_node(VM *vm);
 void add_wire(VM *vm, size_t node1, int port1, size_t node2, int port2);
 void run(VM *vm);

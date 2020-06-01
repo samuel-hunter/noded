@@ -32,7 +32,7 @@ parse_int(const Token *tok)
 /* Convert an escape sequence into a byte. Write the number of chars
  * to advance into *advance, and whether the parse is successful into
  * *ok. */
-uint8_t
+static uint8_t
 parse_escape(const Token *tok, int offset, int *advance, bool *ok)
 {
 	const char *seq = &tok->lit[offset];
@@ -152,5 +152,35 @@ parse_char(const Token *tok)
 	} else {
 		send_error(&tok->pos, ERR, "character literal too long");
 		return 0;
+	}
+}
+
+/* Parse a string into *dest (length BUFFER_NODE_MAX).
+ * Mark all invalid characters. */
+void
+parse_string(uint8_t dest[], const Token *tok)
+{
+	size_t size = 0;
+	int offset = 0, advance = 0;
+	bool ok = false;
+	memset(dest, 0, BUFFER_NODE_MAX);
+
+	while (tok->lit[offset] != '\0') {
+		/* check for possible buffer overflow */
+		if (size == BUFFER_NODE_MAX) {
+			send_error(&tok->pos, ERR,
+				"string literal too long (max length %lu)", BUFFER_NODE_MAX);
+			return;
+		}
+
+		if (tok->lit[offset] == '\\') {
+			*dest++ = parse_escape(tok, offset, &advance, &ok);
+			if (!ok) return;
+			offset += advance;
+			size++;
+		} else {
+			*dest++ = tok->lit[offset++];
+			size++;
+		}
 	}
 }
