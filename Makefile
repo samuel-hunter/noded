@@ -5,7 +5,7 @@ TARGS := noded nodedc
 
 all: $(TARGS)
 
-noded: alloc.o compiler.o dict.o err.o noded.o parse.o scanner.o token.o vec.o
+noded: alloc.o compiler.o dict.o err.o noded.o parse.o scanner.o token.o vec.o vm.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 nodedc: alloc.o compiler.o dict.o err.o nodedc.o parse.o scanner.o token.o vec.o

@@ -244,11 +244,47 @@ struct CodeBlock {
 
 typedef enum
 {
+	NO_NODE,
 	IO_NODE,
 	PROC_NODE,
 	BUFFER_NODE,
 	STACK_NODE,
 } NodeType;
+
+typedef enum
+{
+	IO_IN,
+	IO_OUT,
+} IoPorts;
+
+typedef enum
+{
+	EMPTY,
+	FULL,
+	CONSUMED,
+} WireStatus;
+
+typedef struct Wire Wire;
+struct Wire {
+	WireStatus status;
+	uint8_t buf;
+};
+
+typedef struct Node Node;
+struct Node {
+	NodeType type;
+	void *dat;
+};
+
+typedef struct VM VM;
+struct VM {
+	Node *nodes;
+	size_t nnodes;
+	size_t nodes_added;
+	Wire *wires;
+	size_t nwires;
+	size_t wires_added;
+};
 
 
 /* alloc.c */
@@ -308,6 +344,18 @@ void bytevec_shrink(ByteVec *vec);
 
 void addrvec_append(AddrVec *vec, uint16_t val);
 void addrvec_clear(AddrVec *vec);
+
+
+/* vm.c */
+
+void vm_init(VM *vm, size_t nnodes, size_t nwires);
+void add_io_node(VM *vm);
+void add_proc_node(VM *vm, const uint8_t *code, uint16_t code_size);
+void copy_proc_node(VM *vm, size_t source_node);
+void add_buf_node(VM *vm);
+void add_stack_node(VM *vm);
+void add_wire(VM *vm, size_t node1, int port1, size_t node2, int port2);
+void run(VM *vm);
 
 
 #endif /* NODED_H */

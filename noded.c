@@ -10,145 +10,101 @@
 
 typedef struct NodeRule NodeRule;
 struct NodeRule {
-	NodeType type;
 	size_t id;
-	union {
-		CodeBlock proc;
-	};
+	size_t ports[PORT_MAX];
+	int nports;
 };
 
-typedef struct NodeRuleVec NodeRuleVec;
-struct NodeRuleVec {
-	NodeRule *rules;
-	size_t len;
-	size_t cap;
-};
-
-typedef struct WireRule WireRule;
-struct WireRule {
-	struct {
-		size_t node_id;
-		int portidx;
-	} nodes[2];
-};
-
-/*
- * Return a pointer to a new node rule. This pointer
- * is valid until the next `new_noderule` call.
- */
 static NodeRule *
-new_noderule(NodeRuleVec *vec, NodeType type, size_t id)
+find_rule(NodeRule *rules, size_t nrules, size_t node_id)
 {
-	NodeRule *rule;
-
-	if (vec->cap == vec->len) {
-		vec->cap = vec->cap ? vec->cap*2 : 8;
-		vec->rules = erealloc(vec->rules,
-			vec->cap * sizeof(*vec->rules));
-	}
-
-	rule = &vec->rules[vec->len++];
-	rule->type = type;
-	rule->id = id;
-	return rule;
-}
-
-/*
- * Return a pointer to the target node rule, or
- * NULL if it doesn't exist. This pointer is valid
- * until the next `new_noderule` call.
- */
-static NodeRule *
-find_noderule(NodeRuleVec *vec, size_t id)
-{
-	for (size_t i = 0; i < vec->len; i++) {
-		if (vec->rules[i].id == id)
-			return &vec->rules[i];
+	for (size_t i = 0; i < nrules; i++) {
+		if (rules[i].id == node_id)
+			return &rules[i];
 	}
 
 	return NULL;
 }
 
-static void
-add_processor(Scanner *s, NodeRuleVec *rules, SymDict *dict)
+static size_t
+rule_idx(NodeRule *rules, size_t nrules, size_t node_id)
 {
-	Token name, source;
-	NodeRule *rule, *source_rule;
-
-	expect(s, PROCESSOR, NULL);
-	expect(s, IDENTIFIER, &name);
-	/* Either compile the code block, or piggyback off of another node's code. */
-	switch (peektype(s)) {
-	case LBRACE:
-		/* compile it */
-		rule = new_noderule(rules, PROC_NODE, sym_id(dict, name.lit));
-		compile(s, dict, &rule->proc);
-		break;
-	case ASSIGN:
-		/* find a previous node's code block */
-		expect(s, ASSIGN, NULL);
-		expect(s, IDENTIFIER, &source);
-		expect(s, SEMICOLON, NULL);
-
-		source_rule = find_noderule(rules, sym_id(dict, source.lit));
-		if (source_rule) {
-			rule = new_noderule(rules, PROC_NODE, sym_id(dict, name.lit));
-			compile(s, dict, &rule->proc);
-		} else {
-			send_error(&source.pos, ERR,
-				"processor node %s does not exist", source.lit);
-		}
-		break;
-	default:
-		send_error(&source.pos, ERR, "unexpected token %s", tokstr(peektype(s)));
-		break;
+	for (size_t i = 0; i < nrules; i++) {
+		if (rules[i].id == node_id)
+			return i;
 	}
+
+	return 0;
 }
 
-/*
- * Free the memory allocated by the NodeRuleVec.
- */
-static void
-clear_noderules(NodeRuleVec *vec)
+static int
+find_port(NodeRule *rule, size_t port_id)
 {
-	free(vec->rules);
-	memset(vec, 0, sizeof(*vec));
+	for (int i = 0; i < rule->nports; i++) {
+		if (rule->ports[i] == port_id)
+			return i;
+	}
+
+	return -1;
+}
+
+static void
+skip_processor(Scanner *s)
+{
+	Token tok;
+	int depth;
+
+	expect(s, PROCESSOR, NULL);
+	expect(s, IDENTIFIER, NULL);
+	switch(peektype(s)) {
+	case ASSIGN:
+		expect(s, ASSIGN, NULL);
+		expect(s, IDENTIFIER, NULL);
+		expect(s, SEMICOLON, NULL);
+		break;
+	case LBRACE:
+		depth = 0;
+		do {
+			scan(s, &tok);
+			switch(tok.type) {
+			case LBRACE: depth++; break;
+			case RBRACE: depth--; break;
+			case TOK_EOF:
+				send_error(&tok.pos, ERR, "EOF reached within node block");
+				depth = 0;
+				break;
+			default: break;
+			}
+		} while (depth > 0);
+		break;
+	default:
+		send_error(&s->peek.pos, ERR, "unexpected token %s", tokstr(tok.type));
+		break;
+	}
 }
 
 static void
 skip_buffer(Scanner *s)
 {
-	Token start;
-
-	expect(s, BUFFER, &start);
+	expect(s, BUFFER, NULL);
 	expect(s, IDENTIFIER, NULL);
 	expect(s, ASSIGN, NULL);
 	expect(s, STRING, NULL);
 	expect(s, SEMICOLON, NULL);
-
-	send_error(&start.pos, WARN,
-		"buffers are unimplemented");
 }
 
 static void
 skip_stack(Scanner *s)
 {
-	Token start;
-
-	expect(s, STACK, &start);
+	expect(s, STACK, NULL);
 	expect(s, IDENTIFIER, NULL);
 	expect(s, SEMICOLON, NULL);
-
-	send_error(&start.pos, WARN,
-		"stacks are unimplemented");
 }
 
 static void
 skip_wire(Scanner *s)
 {
-	Token start;
-
-	expect(s, IDENTIFIER, &start);
+	expect(s, IDENTIFIER, NULL);
 	expect(s, PERIOD, NULL);
 	expect(s, IDENTIFIER, NULL);
 	expect(s, WIRE, NULL);
@@ -156,9 +112,92 @@ skip_wire(Scanner *s)
 	expect(s, PERIOD, NULL);
 	expect(s, IDENTIFIER, NULL);
 	expect(s, SEMICOLON, NULL);
+}
 
-	send_error(&start.pos, WARN,
-		"wires are unimplemented");
+static void
+scan_processor(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
+{
+	Token name, source;
+	size_t source_id;
+	CodeBlock block;
+	NodeRule *rule = &rules[nrules]; /* this node's rule */
+	NodeRule *source_rule;
+
+	expect(s, PROCESSOR, NULL);
+	expect(s, IDENTIFIER, &name);
+
+	switch (peektype(s)) {
+	case LBRACE:
+		compile(s, dict, &block);
+		add_proc_node(vm, block.code, block.size);
+		rule->id = sym_id(dict, name.lit);
+		memcpy(rule->ports, block.ports, sizeof(rule->ports));
+		rule->nports = block.nports;
+		break;
+	case ASSIGN:
+		expect(s, ASSIGN, NULL);
+		expect(s, IDENTIFIER, &source);
+		expect(s, SEMICOLON, NULL);
+
+		source_id = sym_id(dict, source.lit);
+		source_rule = find_rule(rules, nrules, source_id);
+		if (source_rule) {
+			copy_proc_node(vm, rule_idx(rules, nrules, source_id));
+			if (!has_errors()) {
+				*rule = *source_rule;
+				rule->id = sym_id(dict, name.lit);
+			}
+		} else {
+			send_error(&name.pos, ERR, "processor %s does not exist", name.lit);
+		}
+		break;
+	default:
+		send_error(&s->peek.pos, ERR,
+			"unexpected token %s", tokstr(s->peek.type));
+	}
+}
+
+static void
+scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
+{
+	Token node1, port1, node2, port2;
+	size_t node1_id, node2_id;
+	int port1idx = -1, port2idx = -1;
+	NodeRule *rule;
+
+	expect(s, IDENTIFIER, &node1);
+	expect(s, PERIOD, NULL);
+	expect(s, IDENTIFIER, &port1);
+	expect(s, WIRE, NULL);
+	expect(s, IDENTIFIER, &node2);
+	expect(s, PERIOD, NULL);
+	expect(s, IDENTIFIER, &port2);
+	expect(s, SEMICOLON, NULL);
+
+	node1_id = sym_id(dict, node1.lit);
+	node2_id = sym_id(dict, node2.lit);
+
+	rule = find_rule(rules, nrules, node1_id);
+	if (rule) {
+		port1idx = find_port(rule, sym_id(dict, port1.lit));
+		if (port1idx < 0)
+			send_error(&port1.pos, ERR, "undefined port %s", port1.lit);
+	} else {
+		send_error(&node1.pos, ERR, "undefined node %s", node1.lit);
+	}
+
+	rule = find_rule(rules, nrules, node2_id);
+	if (rule) {
+		port2idx = find_port(rule, sym_id(dict, port2.lit));
+		if (port2idx < 0)
+			send_error(&port2.pos, ERR, "undefined port %s", port2.lit);
+	} else {
+		send_error(&node2.pos, ERR, "undefined node %s", node2.lit);
+	}
+
+	if (!has_errors())
+		add_wire(vm, rule_idx(rules, nrules, node1_id), port1idx,
+			rule_idx(rules, nrules, node2_id), port2idx);
 }
 
 int
@@ -168,12 +207,13 @@ main(int argc, char *argv[])
 	FILE *f;
 	Scanner s;
 
-	SymDict dict = {0};
-	NodeRuleVec rules = {0};
-	
-	/* WireRule *wires = NULL; */
+	size_t nnodes = 1; /* start with 1 for the IO node */
 	size_t nwires = 0;
-	/* size_t wire_cap = 0; */
+
+	VM vm;
+	SymDict dict = {0};
+	NodeRule *rules = NULL;
+	size_t nodes_parsed = 0;
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s FILE\n", argv[0]);
@@ -187,15 +227,22 @@ main(int argc, char *argv[])
 
 	init_error(f, fname);
 	init_scanner(&s, f);
+
+	/* First pass: count the number of nodes and wires
+     * to allocate
+     */
 	while (peektype(&s) != TOK_EOF && !has_errors()) {
 		switch (peektype(&s)) {
 		case PROCESSOR:
-			add_processor(&s, &rules, &dict);
+			nnodes++;
+			skip_processor(&s);
 			break;
 		case BUFFER:
+			nnodes++;
 			skip_buffer(&s);
 			break;
 		case STACK:
+			nnodes++;
 			skip_stack(&s);
 			break;
 		case IDENTIFIER:
@@ -208,17 +255,55 @@ main(int argc, char *argv[])
 			break;
 		}
 	}
-
-	fclose(f);
 	if (has_errors()) return 1;
 
-	/* Give a status report */
-	printf("Nodes: %lu\n", rules.len);
-	printf("Wires: %lu\n", nwires);
+	/* nnodes+1 to account for IO node */
+	vm_init(&vm, nnodes, nwires);
+	rules = ecalloc(nnodes, sizeof(*rules));
 
-	/* Clean up some (but not all) memory */
-	clear_noderules(&rules);
+	/* Rewind to the beginning and rescan, building everything up. */
+	if (fseek(f, 0, SEEK_SET) < 0)
+		err(1, "%s", fname);
+	init_scanner(&s, f); /* re-initialize */
+
+	/* begin with adding the IO node */
+	{
+		size_t io_ports[PORT_MAX] = {sym_id(&dict, "in"), sym_id(&dict, "out")};
+		NodeRule *rule = &rules[nodes_parsed++];
+
+		rule->id = sym_id(&dict, "io");
+		memcpy(rule->ports, io_ports, sizeof(rule->ports));
+		rule->nports = 2;
+
+		add_io_node(&vm);
+	}
+
+	while (peektype(&s) != TOK_EOF && !has_errors()) {
+
+		switch (peektype(&s)) {
+		case PROCESSOR:
+			scan_processor(&s, &dict, &vm, rules, nodes_parsed);
+			nodes_parsed++;
+			break;
+		case IDENTIFIER:
+			scan_wire(&s, &dict, &vm, rules, nodes_parsed);
+			break;
+		case BUFFER:
+		case STACK:
+			send_error(&s.peek.pos, ERR, "unimplemented node");
+			break;
+		default:
+			send_error(&s.peek.pos, ERR,
+				"unexpected token %s", tokstr(s.peek.type));
+			break;
+		}
+	}
+
+	if (has_errors()) return 1;
+	free(rules);
 	clear_dict(&dict);
+	run(&vm);
 
+	/* don't free the VM's memory -- the OS collects the garbage anyway */
 	return 0;
 }
