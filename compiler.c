@@ -894,12 +894,14 @@ static void
 parse_while_stmt(Context *ctx)
 {
 	Scanner *s = ctx->s;
+	Expression expr;
 	Token start;
 
 	push_scope(ctx);
 	expect(s, WHILE, &start);
 	expect(s, LPAREN, NULL);
-	parse_expr(ctx, PREC_NONE);
+	expr = parse_expr(ctx, PREC_NONE);
+	asm_value(ctx, expr, &start);
 	asm_break(ctx, OP_FJMP);
 	expect(s, RPAREN, NULL);
 
