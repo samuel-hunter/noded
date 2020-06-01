@@ -255,6 +255,7 @@ typedef enum
 {
 	IO_IN,
 	IO_OUT,
+	IO_ERR,
 } IoPorts;
 
 typedef enum

@@ -325,6 +325,7 @@ main(int argc, char *argv[])
 		size_t io_ports[] = {
 			[IO_IN] = sym_id(&dict, "in"),
 			[IO_OUT] = sym_id(&dict, "out"),
+			[IO_ERR] = sym_id(&dict, "err"),
 		};
 		NodeRule *rule = &rules[nodes_parsed++];
 

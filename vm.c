@@ -220,9 +220,18 @@ send_io(Wire *wire, void *recp, int port, uint8_t dat)
 {
 	(void)wire;
 	(void)recp;
-	(void)port; /* assumed port == IO_OUT */
 
-	putchar(dat);
+	switch (port) {
+	case IO_OUT:
+		putc(dat, stdout);
+		break;
+	case IO_ERR:
+		putc(dat, stderr);
+		break;
+	default:
+		errx(1, "send_io(): invalid port %d.", port);
+		break;
+	}
 	return true;
 }
 
@@ -231,8 +240,10 @@ recv_io(Wire *wire, void *recp, int port, uint8_t *dest)
 {
 	(void)wire;
 	(void)recp;
-	(void)port; /* assumed port == IO_IN */
 	int chr;
+
+	if (port != IO_IN)
+		errx(1, "recv_io(): invalid port %d.", port);
 
 	chr = getchar();
 	if (chr == EOF) {
