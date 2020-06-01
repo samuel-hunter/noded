@@ -1,0 +1,31 @@
+/* tac
+ * Not the UNIX tac, but rather reverses individual lines.
+ */
+processor store {
+	$chr <- %in;
+
+	if ($chr != '\n') {
+		%st <- $chr;
+		++$size;
+	} else {
+		%send <- $size;
+		$size = 0;
+	}
+}
+
+stack line;
+
+processor report {
+	$size <- %size;
+	while ($size) {
+		%out <- %in;
+		--$size;
+	}
+	%out <- '\n';
+}
+
+io.in -> store.in;
+store.st -> line.elm;
+store.send -> report.size;
+line.elm -> report.in;
+report.out -> io.out;
