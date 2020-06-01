@@ -352,7 +352,9 @@ sending and receiving values. Wires are bidirectional units of
 communication that two ports use to send messages to each other.
 
 In a Noded program, node declarations specify the ports that each node
-has, and wire declarations connect the ports together.
+has, and wire declarations connect the ports together. Nodes are the
+heartbeat of the program, and as such, wires must be connected to
+at least one processor node.
 
 ```
 (* Within a processor node: *)

@@ -106,23 +106,15 @@ processor cat {
 	// forever
 	$chr <- %in;
 	%out <- $chr;
-    
-    // You could also wire them up directly via:
-    //   %out <- %in;
+
+	// You could also wire them up directly via:
+	//   %out <- %in;
 }
 
 // The special node `io` has a port `in` which will read from the
 // console and block forever when there is no more input.
 io.in -> cat.in;
 cat.out -> io.out;
-```
-
-The preivous `cat` node was explicit, and the processor wasn't
-technically unnecessary:
-
-```c
-// input and output can be piped directly to each other.
-io.in -> io.out;
 ```
 
 ### Truth Machine

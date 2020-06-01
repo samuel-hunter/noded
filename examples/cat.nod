@@ -1,6 +1,11 @@
 /* cat.nod
  * Redirect input to output
  */
+processor cat {
+	// Take everything in and sent it immediately out
+	%out <- %in;
+}
 
-// input and output can be piped directly to each other.
-io.in -> io.out;
+io.in -> cat.in;
+cat.out -> io.out;
+
