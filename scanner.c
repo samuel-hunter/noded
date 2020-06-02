@@ -32,6 +32,11 @@ static TokenType wire(Scanner *s, char *lit, char c);
 static TokenType comment(Scanner *s, char *lit, char c);
 static TokenType send(Scanner *s, char *lit, char c);
 
+/* The token table defines all rules and associated data
+ * for scanning. Some rules (e.g. &send, &comment, &port)
+ * have corner cases which is passed down to simpler
+ * rules (like &scan#) when they're not met.
+ */
 static TokenRule token_table[UCHAR_MAX+1] = {
 	['('] =  {&simple,  LPAREN, 0, 0, 0, 0},
 	[')'] =  {&simple,  RPAREN, 0, 0, 0, 0},
@@ -70,6 +75,8 @@ isutf8(char c)
 	/* Make EOF an exception to make parsing easier. Not all
          * negative values are UTF8 characters, and EOF isn't the only
          * one. For our purposes, though, it should be enough. */
+
+	/* TODO: return true for ONLY valid utf-8 characters. */
 	return c < 0 && c != EOF;
 }
 
@@ -101,6 +108,8 @@ init_scanner(Scanner *scanner, FILE *f)
 	memset(scanner, 0, sizeof(*scanner));
 	scanner->f = f;
 	scanner->pos.lineno = 1;
+
+	/* TODO: skip the UTF-8 optional BOM */
 
 	next(scanner); /* Prime the rune buffer. */
 }

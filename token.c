@@ -98,6 +98,8 @@ static const char *tokens[] = {
 	[STACK] = "stack",
 };
 
+/* TODO: would it be worthwile to put these into
+ * a perfect hashtable instead? */
 struct {
 	const char *literal;
 	TokenType type;

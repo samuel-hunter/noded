@@ -1,15 +1,12 @@
 /*
  * err - error handling
  *
- * send_error(), the actual error-handling function, is noticeably
- * missing from here. Instead of passing down a function pointer to
- * every nontrivial module (scanning, parsing, compiling), it's much
- * simpler for each module to just call that handler outright.
- *
- * So, packed in noded.c and every tool, is their own implementation
- * of send_error(). Each program is still allowed to handle the error
- * in their own way, e.g. the tests can immediately exit on the first
- * error.
+ * Error handling should be rich enough so that the programmer
+ * understands which line caused the programming error. I feel
+ * for a language as small as this, that printing the conventional
+ * filename:line:col, as well as printing the line number and a caret
+ * under the offending token, should be a good enough complement
+ * to the error.
  */
 #include <err.h>
 #include <stdio.h>

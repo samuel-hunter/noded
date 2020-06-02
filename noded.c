@@ -8,6 +8,12 @@
 
 #include "noded.h"
 
+/*
+ * The VM recognizes ports as an index from 0 to PORT_MAX-1. The compiler
+ * fills out an array mapping each port's name (as an id from sym_id())
+ * to the index. Here, a vector of NodeRules stores all ports so that
+ * scan_wire() can map `node.port` to a node# and port#.
+ */
 typedef struct NodeRule NodeRule;
 struct NodeRule {
 	size_t id;
@@ -34,6 +40,9 @@ rule_idx(NodeRule *rules, size_t nrules, size_t node_id)
 			return i;
 	}
 
+	/* TODO: this algorithm is extremely similar to find_rule() until
+     * the return value is received. Perhaps merge functions and return
+     * the index by passing in a pointer? */
 	return 0;
 }
 
@@ -47,6 +56,11 @@ find_port(NodeRule *rule, size_t port_id)
 
 	return -1;
 }
+
+/*
+ * the skip_*() procedures consume and discard all the tokens
+ * specific to a singular declaration.
+ */
 
 static void
 skip_processor(Scanner *s)
@@ -113,6 +127,12 @@ skip_wire(Scanner *s)
 	expect(s, IDENTIFIER, NULL);
 	expect(s, SEMICOLON, NULL);
 }
+
+/*
+ * the scan_*() procedures take in a node declaration (or a wire) and add it
+ * to the VM. All nodes and their respective port data are added to the NodeRule
+ * array.
+ */
 
 static void
 scan_processor(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
@@ -231,6 +251,9 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 	node1_id = sym_id(dict, node1.lit);
 	node2_id = sym_id(dict, node2.lit);
 
+	/* The VM recognizes the indices of each node and port. Go through the
+     * node rules to find them. */
+
 	rule = find_rule(rules, nrules, node1_id);
 	if (rule) {
 		port1idx = find_port(rule, sym_id(dict, port1.lit));
@@ -249,9 +272,10 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 		send_error(&node2.pos, ERR, "undefined node %s", node2.lit);
 	}
 
-	if (!has_errors())
-		add_wire(vm, rule_idx(rules, nrules, node1_id), port1idx,
-			rule_idx(rules, nrules, node2_id), port2idx);
+	if (has_errors()) return;
+
+	add_wire(vm, rule_idx(rules, nrules, node1_id), port1idx,
+		rule_idx(rules, nrules, node2_id), port2idx);
 }
 
 int
@@ -336,8 +360,8 @@ main(int argc, char *argv[])
 		add_io_node(&vm);
 	}
 
+	/* Add all the nodes and wires */
 	while (peektype(&s) != TOK_EOF && !has_errors()) {
-
 		switch (peektype(&s)) {
 		case PROCESSOR:
 			scan_processor(&s, &dict, &vm, rules, nodes_parsed);
@@ -362,6 +386,7 @@ main(int argc, char *argv[])
 	}
 
 	if (has_errors()) return 1;
+
 	free(rules);
 	clear_dict(&dict);
 	run(&vm);

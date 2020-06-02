@@ -13,24 +13,9 @@
 
 #include "noded.h"
 
-static void
-init(SymDict *dict)
-{
-	dict->cap = 8;
-	dict->syms = ecalloc(dict->cap, sizeof(*dict->syms));
-
-	/*
-	 * Enforce an empty string as id #0 so that it is unreachable
-	 * from comparing valid identifiers.
-         */
-	sym_id(dict, "");
-}
-
 size_t
 sym_id(SymDict *dict, const char *sym)
 {
-	if (dict->cap == 0)
-		init(dict);
 
 	for (size_t i = 0; i < dict->len; i++) {
 		if (strcmp(dict->syms[i], sym) == 0)
@@ -39,7 +24,7 @@ sym_id(SymDict *dict, const char *sym)
 
 	/* No strings matched; add a new one to the array. */
 	if (dict->len == dict->cap) {
-		dict->cap *= 2;
+		dict->cap = dict->cap ? dict->cap*2 : 8;
 		dict->syms = erealloc(dict->syms,
 			dict->cap * sizeof(*dict->syms));
 	}

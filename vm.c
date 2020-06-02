@@ -12,6 +12,7 @@ enum
 	STACK_SIZE = 512,
 };
 
+/* Holds all metadata for sending and receiving data */
 typedef struct Port Port;
 struct Port {
 	Node *recp; /* owned by VM */
@@ -20,6 +21,8 @@ struct Port {
 	Wire *wire; /* owned by VM */
 };
 
+/* Processor nodes execute code and send/receive messages
+ * between other nodes. */
 typedef struct ProcNode ProcNode;
 struct ProcNode {
 	const uint8_t *code;
@@ -29,22 +32,30 @@ struct ProcNode {
 	Port ports[PORT_MAX];
 	uint8_t vars[VAR_MAX];
 
+	/* TODO dynamically allocate stack */
 	uint8_t stack[STACK_SIZE];
 	uint8_t *sp; /* sp = &stack[i] */
 };
 
+/* Buffer nodes store and recall data for processor nodes to use. */
 typedef struct BufNode BufNode;
 struct BufNode {
 	uint8_t idx;
 	uint8_t data[BUFFER_NODE_MAX];
 };
 
+/* Stack nodes push and pop data. Similar to buffer nodes, except
+ * they have a dynamically allocated amount of space to store, rather
+ * than a fixed space constrained by the maximum value of the byte. */
 typedef struct StackNode StackNode;
 struct StackNode {
 	uint8_t *stack;
 	size_t len;
 	size_t cap;
 };
+
+/* The port rule table holds the logic between how processor nodes
+ * interact with nodes of various types. */
 
 typedef bool (*Sendlet)(Wire *wire, void *recp, int port, uint8_t dat);
 typedef bool (*Recvlet)(Wire *wire, void *recp, int port, uint8_t *dest);
@@ -171,6 +182,8 @@ add_wire(VM *vm, size_t node1, int port1, size_t node2, int port2)
 	}
 
 	if (n1->type != PROC_NODE && n2->type != PROC_NODE) {
+		/* TODO push error-checking to noded.c, where they can
+		 * use token positions to point people to the problem. */
 		errx(1, "add_wire(): neither nodes are processors.");
 	}
 }
