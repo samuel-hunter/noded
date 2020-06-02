@@ -21,29 +21,22 @@ struct NodeRule {
 	int nports;
 };
 
+/*
+ * Search through the NodeRules, and if one is found,
+ * set *idx (if non-NULL) to the index, and then return the node rule
+ * pointer.
+ */
 static NodeRule *
-find_rule(NodeRule *rules, size_t nrules, size_t node_id)
+find_rule(NodeRule *rules, size_t nrules, size_t node_id, size_t *idx)
 {
 	for (size_t i = 0; i < nrules; i++) {
-		if (rules[i].id == node_id)
+		if (rules[i].id == node_id) {
+			if (idx) *idx = i;
 			return &rules[i];
+		}
 	}
 
 	return NULL;
-}
-
-static size_t
-rule_idx(NodeRule *rules, size_t nrules, size_t node_id)
-{
-	for (size_t i = 0; i < nrules; i++) {
-		if (rules[i].id == node_id)
-			return i;
-	}
-
-	/* TODO: this algorithm is extremely similar to find_rule() until
-     * the return value is received. Perhaps merge functions and return
-     * the index by passing in a pointer? */
-	return 0;
 }
 
 static int
@@ -138,7 +131,7 @@ static void
 scan_processor(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 {
 	Token name, source;
-	size_t source_id;
+	size_t source_id, source_idx;
 	CodeBlock block;
 	NodeRule *rule = &rules[nrules]; /* this node's rule */
 	NodeRule *source_rule;
@@ -160,9 +153,9 @@ scan_processor(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules
 		expect(s, SEMICOLON, NULL);
 
 		source_id = sym_id(dict, source.lit);
-		source_rule = find_rule(rules, nrules, source_id);
+		source_rule = find_rule(rules, nrules, source_id, &source_idx);
 		if (source_rule) {
-			copy_proc_node(vm, rule_idx(rules, nrules, source_id));
+			copy_proc_node(vm, source_idx);
 			if (!has_errors()) {
 				/* This node has the same exact rules as the previous node. */
 				*rule = *source_rule;
@@ -236,6 +229,7 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 {
 	Token node1, port1, node2, port2;
 	size_t node1_id, node2_id;
+	size_t node1_idx, node2_idx;
 	int port1idx = -1, port2idx = -1;
 	NodeRule *rule;
 
@@ -254,7 +248,7 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 	/* The VM recognizes the indices of each node and port. Go through the
      * node rules to find them. */
 
-	rule = find_rule(rules, nrules, node1_id);
+	rule = find_rule(rules, nrules, node1_id, &node1_idx);
 	if (rule) {
 		port1idx = find_port(rule, sym_id(dict, port1.lit));
 		if (port1idx < 0)
@@ -263,7 +257,7 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 		send_error(&node1.pos, ERR, "undefined node %s", node1.lit);
 	}
 
-	rule = find_rule(rules, nrules, node2_id);
+	rule = find_rule(rules, nrules, node2_id, &node2_idx);
 	if (rule) {
 		port2idx = find_port(rule, sym_id(dict, port2.lit));
 		if (port2idx < 0)
@@ -274,8 +268,7 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 
 	if (has_errors()) return;
 
-	add_wire(vm, rule_idx(rules, nrules, node1_id), port1idx,
-		rule_idx(rules, nrules, node2_id), port2idx);
+	add_wire(vm, node1_idx, port1idx, node2_idx, port2idx);
 }
 
 int
