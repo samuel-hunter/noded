@@ -32,7 +32,13 @@ struct ProcNode {
 	Port ports[PORT_MAX];
 	uint8_t vars[VAR_MAX];
 
-	/* TODO dynamically allocate stack */
+	/* I think I'll keep the stack statically allocated. It's
+	 * large enough to prevent most stack overflows, it's close
+	 * enough to related memory to reduce cache misses, and
+	 * stack overflows when nodes are otherwise quite constrained
+	 * are more likely a bug in the compiler that I can identify
+	 * earlier with a stack overflow error than a program pushing
+     * values forever. */
 	uint8_t stack[STACK_SIZE];
 	uint8_t *sp; /* sp = &stack[i] */
 };
@@ -49,9 +55,8 @@ struct BufNode {
  * than a fixed space constrained by the maximum value of the byte. */
 typedef struct StackNode StackNode;
 struct StackNode {
-	uint8_t *stack;
-	size_t len;
-	size_t cap;
+	/* Should I typedef the bytevec directly? */
+	ByteVec vec;
 };
 
 /* The port rule table holds the logic between how processor nodes
@@ -311,12 +316,7 @@ static bool send_stack(Wire *wire, void *recp, int port, uint8_t dat)
 	(void)port;
 	StackNode *stack = recp;
 
-	if (stack->cap == stack->len) {
-		stack->cap = stack->cap ? stack->cap*2 : 8;
-		stack->stack = erealloc(stack->stack, stack->cap);
-	}
-
-	stack->stack[stack->len++] = dat;
+	bytevec_append(&stack->vec, dat);
 	return true;
 }
 
@@ -326,8 +326,8 @@ static bool recv_stack(Wire *wire, void *recp, int port, uint8_t *dest)
 	(void)port;
 	StackNode *stack = recp;
 
-	if (stack->len > 0) {
-		*dest = stack->stack[--stack->len];
+	if (stack->vec.len > 0) {
+		*dest = stack->vec.buf[--stack->vec.len];
 		return true;
 	} else {
 		return false;
