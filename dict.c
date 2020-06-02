@@ -30,7 +30,8 @@ sym_id(SymDict *dict, const char *sym)
 	}
 
 	size_t result = dict->len++;
-	dict->syms[result] = strdup(sym);
+	dict->syms[result] = ecalloc(1, strlen(sym)+1); /* +1 for '\0' */
+	strcpy(dict->syms[result], sym);
 
 	return result;
 }

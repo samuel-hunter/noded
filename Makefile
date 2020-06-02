@@ -1,5 +1,5 @@
 
-CFLAGS := -Werror -Wall -Wextra -Wpedantic -g
+CFLAGS := -std=c99 -Werror -Wall -Wextra -Wpedantic -g
 LDFLAGS :=
 TARGS := noded nodedc
 

@@ -58,8 +58,7 @@ void
 send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 {
 	const char *typestr = NULL;
-	char *lineptr = NULL;
-	size_t n;
+	char linebuf[80];
 	long offset;
 	va_list ap;
 
@@ -99,30 +98,35 @@ send_error(const Position *pos, ErrorType type, const char *fmt, ...)
 	/* Skip printing the offending line if we can't seek to it. */
 	if (fseek(Globals.f, 0, SEEK_CUR) != 0) return;
 
-	/* Print the offending line and a caret to its column */
+
 	offset = ftell(Globals.f); /* preserve seek pos for later. */
 	rewind(Globals.f);
-	for (int curline = 0; curline < pos->lineno; curline++) {
-		getline(&lineptr, &n, Globals.f);
+	for (int curline = 1; curline < pos->lineno; ) {
+			/* keep consuming lines until we get to our line. */
+		fgets(linebuf, sizeof(linebuf), Globals.f);
+		if (strchr(linebuf, '\n')) curline++;
 	}
-	printf("%s", lineptr);
+	/* fetch our line */
+	fgets(linebuf, sizeof(linebuf), Globals.f);
+
+	/* Print the offending line and a caret to its column */
+	printf("%s", linebuf);
 	fseek(Globals.f, offset, SEEK_SET);
 
 
-	if (lineptr[pos->colno] == '\n') {
-		/* Error at end of line; don't post caret */
+	if ((size_t)pos->colno >= sizeof(linebuf) || linebuf[pos->colno] == '\n') {
+		/* Error at end of line or too far right; don't post caret */
 		fprintf(stderr, "\n");
 	} else {
 		for (int i = 0; i < pos->colno; i++) {
-			if (lineptr[i] == '\t') {
-				fprintf(stderr, "\t");
+			if (linebuf[i] == '\t') {
+				putc('\t', stderr);
 			} else {
-				fprintf(stderr, " ");
+				putc(' ', stderr);
 			}
 		}
 		fprintf(stderr, "^\n");
 	}
-	free(lineptr);
 
 	switch (type) {
 	case WARN:
