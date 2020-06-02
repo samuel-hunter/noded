@@ -39,8 +39,6 @@ init_error(FILE *f, const char *fname)
 /*
  * Use heuristics to return whether printing color
  * control characters is appropriate.
- *
- * TODO add command flags to force enable/disable.
  */
 static bool
 iscolor(void)

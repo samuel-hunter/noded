@@ -185,12 +185,6 @@ add_wire(VM *vm, size_t node1, int port1, size_t node2, int port2)
 		ProcNode *proc = n2->dat;
 		add_wire_to_port(&proc->ports[port2], wire, n1, port1);
 	}
-
-	if (n1->type != PROC_NODE && n2->type != PROC_NODE) {
-		/* TODO push error-checking to noded.c, where they can
-		 * use token positions to point people to the problem. */
-		errx(1, "add_wire(): neither nodes are processors.");
-	}
 }
 
 static bool

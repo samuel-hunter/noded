@@ -9,11 +9,6 @@
 
 #include "noded.h"
 
-/* TODO move to main() in the future */
-struct {
-	SymDict dict;
-} Globals = {0};
-
 /* Print disassembled code */
 static void
 disasm(CodeBlock *block)
@@ -47,7 +42,7 @@ disasm(CodeBlock *block)
 }
 
 static void
-report_processor(Scanner *s)
+report_processor(Scanner *s, SymDict *dict)
 {
 	Token name;
 	Token source;
@@ -60,7 +55,7 @@ report_processor(Scanner *s)
 	case LBRACE:
 		/* assumes compile returns non-NULL because
 		 * send_error() automatically exits */
-		compile(s, &Globals.dict, &block);
+		compile(s, dict, &block);
 		if (has_errors()) break;
 
 		printf("Processor %s:\n", name.lit);
@@ -130,6 +125,7 @@ report_wire(Scanner *s)
 int
 main(int argc, char *argv[])
 {
+	SymDict dict = {0};
 	Scanner s;
 	char *fname;
 	FILE *f;
@@ -147,7 +143,7 @@ main(int argc, char *argv[])
 	while (peektype(&s) != TOK_EOF) {
 		switch (peektype(&s)) {
 		case PROCESSOR:
-			report_processor(&s);
+			report_processor(&s, &dict);
 			break;
 		case BUFFER:
 			report_buffer(&s);

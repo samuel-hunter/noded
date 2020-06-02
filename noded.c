@@ -19,6 +19,7 @@ struct NodeRule {
 	size_t id;
 	size_t ports[PORT_MAX];
 	int nports;
+	bool is_proc;
 };
 
 /*
@@ -146,6 +147,7 @@ scan_processor(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules
 		rule->id = sym_id(dict, name.lit);
 		memcpy(rule->ports, block.ports, sizeof(rule->ports));
 		rule->nports = block.nports;
+		rule->is_proc = true;
 		break;
 	case ASSIGN:
 		expect(s, ASSIGN, NULL);
@@ -227,16 +229,17 @@ scan_stack(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 static void
 scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 {
-	Token node1, port1, node2, port2;
+	Token node1, port1, wire, node2, port2;
 	size_t node1_id, node2_id;
 	size_t node1_idx, node2_idx;
+	bool has_proc = false;
 	int port1idx = -1, port2idx = -1;
 	NodeRule *rule;
 
 	expect(s, IDENTIFIER, &node1);
 	expect(s, PERIOD, NULL);
 	expect(s, IDENTIFIER, &port1);
-	expect(s, WIRE, NULL);
+	expect(s, WIRE, &wire);
 	expect(s, IDENTIFIER, &node2);
 	expect(s, PERIOD, NULL);
 	expect(s, IDENTIFIER, &port2);
@@ -253,6 +256,7 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 		port1idx = find_port(rule, sym_id(dict, port1.lit));
 		if (port1idx < 0)
 			send_error(&port1.pos, ERR, "undefined port %s", port1.lit);
+		has_proc |= rule->is_proc;
 	} else {
 		send_error(&node1.pos, ERR, "undefined node %s", node1.lit);
 	}
@@ -262,11 +266,16 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 		port2idx = find_port(rule, sym_id(dict, port2.lit));
 		if (port2idx < 0)
 			send_error(&port2.pos, ERR, "undefined port %s", port2.lit);
+		has_proc |= rule->is_proc;
 	} else {
 		send_error(&node2.pos, ERR, "undefined node %s", node2.lit);
 	}
 
 	if (has_errors()) return;
+	if (!has_proc) {
+		send_error(&wire.pos, ERR, "neither node is a processor");
+		return;
+	}
 
 	add_wire(vm, node1_idx, port1idx, node2_idx, port2idx);
 }
