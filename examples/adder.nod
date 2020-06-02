@@ -40,7 +40,7 @@ processor reader {
 // Accumulate all numbers and send them off
 processor adder {
 	$status <- %in;
-        if ($status == 0) {
+	if ($status == 0) {
 		// op 0 = Next Number
 		$num <- %in;
 		$total += $num;

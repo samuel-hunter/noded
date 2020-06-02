@@ -34,10 +34,10 @@ ecalloc(size_t nmemb, size_t size)
 	/*
 	 * According to malloc(3) from the Linux Programmer's Manual:
 	 *
-         *   If nmemb or size is 0, then calloc() returns either NULL,
-         *   or a unique pointer value that can later be successfully
-         *   passed to free().
-         *
+	 *   If nmemb or size is 0, then calloc() returns either NULL,
+	 *   or a unique pointer value that can later be successfully
+	 *   passed to free().
+	 *
 	 * Sounds like a terrible wart, especially when gracefully
 	 * cascading error values. Instead treat nmemb*size==0 as a
 	 * no-op.
