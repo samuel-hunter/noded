@@ -280,8 +280,6 @@ array. `%elm` represents the element of the array that the index is
 pointing to. In C-like terms, accessing `%idx` and `%elm` is like
 accessing the variable `idx` and the expression `buffer[idx]`.
 
-`%idx` and `%elm` can be connected to only one port.
-
 All buffers have a size of `256` elements, the maximum size of a byte
 plus one. As such, there is no exceptional case where an element
 out-of-bounds is accessed.
@@ -292,18 +290,10 @@ A stack nodes holds a stack of bytes. It has a single read-write port,
 `%elm`. Writing to `%elm` pushes a byte to the stack, and reading from
 `%elm` pops a byte from the stack, and sends the value over.
 
-`%elm` can be connected to only one port.
+If `%elm` is read when the stack is empty, then the port is blocked until
+another node sends a value to the stack.
 
-If `%elm` is read when the stack is empty, then the stack returns the
-error value `255`.
-
-A stack must have at least `1024` bytes, but it may be larger. If more
-numbers are pushed to the stack than it can handle, the runtime should
-prematurely exit with a nonzero error status.
-
-The current implementation dynamically allocates memory for each stack
-node, so that it can hold as many bytes as the operating system
-allows it to allocate.
+A stack's memory should grow dynamically to contain all values pushed to it.
 
 ```
 stack_node_decl = "stack" name ";" ;
@@ -325,12 +315,10 @@ streams found in a POSIX environment.
 
 The `%in` port is a read-only port that reads bytes from a standard
 input stream. The input stream may close, in which case the `%in` port
-will send an EOF value `255` and finally block forever.
+will block.
 
 The `%out` port is write-only that sends bytes to a standard output
 stream. `%err` similarly writes to an error output stream.
-
-`%in`, `%out`, and `%err` can only be connected one port each.
 
 This example program capitalizes all letters sent from `%in` and
 relays the processed result to `%out`:
@@ -343,6 +331,9 @@ processor capitalize {
     }
     %out <- $chr;
 }
+
+io.in -> capitalize.in;
+capitalize.out -> io.out;
 ```
 
 ## Ports and Wires
@@ -414,11 +405,10 @@ A variable is a unit of storage for holding a byte within a processor
 node. A variable is prefixed with a dollar sign `$`, followed by an
 alphanumeric sequence.
 
-Variables don't have to be declared; they are automatic. There is only
-one datatype that a variable can hold, and the scope of a variable
-consists of the entire node.
-
-All variables initialize at `0` at the start of execution.
+Variables don't have to be declared; they can be used immediately. All
+variables are initialized with the value of `0` at the start of the
+program, and the scope of all variables are local to the processor
+it is used in.
 
 ```
 variable = "$" letter { alphanumeric }
