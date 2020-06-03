@@ -18,6 +18,7 @@ The project uses a simple Makefile and assumes a POSIX environment. To
 build and run the interpreter, simply:
 
 ```
+$ git clone https://git.sr.ht/~shunter/noded
 $ make
 $ sudo make install # why would you do this?
 $ ./noded examples/hello.nod
@@ -63,6 +64,9 @@ A more detailed specification which has the nitty-gritty details can
 be found in [SPEC.md](./SPEC.md).
 
 ## Examples
+
+More examples can be found in the [corresponding
+directory](./examples).
 
 ### Hello World
 
@@ -115,6 +119,7 @@ report.out -> io.out;
 ```
 
 Without comments, and slightly more compacted:
+
 ```c
 processor report {
 	%idx <- $i++;
@@ -173,6 +178,3 @@ processor truth {
 io.in -> truth.in;
 truth.out -> io.out;
 ```
-
-More examples can be found in the [corresponding
-directory](./examples).
