@@ -19,6 +19,7 @@ build and run the interpreter, simply:
 
 ```
 $ git clone https://git.sr.ht/~shunter/noded
+$ cd noded
 $ make
 $ sudo make install # why would you do this?
 $ ./noded examples/hello.nod
