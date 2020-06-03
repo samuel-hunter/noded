@@ -12,13 +12,50 @@ This project is maid half as a toy implementation, and half as a
 thought experiment for a concurrent language. Please don't have any
 expectations of it being fast, or accurate, or cope with invalid code.
 
+## Building
+
+The project uses a simple Makefile and assumes a POSIX environment. To
+build and run the interpreter, simply:
+
+```
+$ make
+$ sudo make install # why would you do this?
+$ ./noded examples/hello.nod
+```
+
 ## Progress
 
-I'm in progress of a rewrite. The working version before the rewrite
-is tagged as `v0.0.0`, and it was written very ad-hoc style as I
-figured out what the problem really was. Now that I have an idea, this
-rewrite should make a much cleaner version with code I'd be more proud
-of!
+The implementation should be valid to the specification draft for all
+valid prorgrams. There are a few bugs which need to be worked out
+(most documented as TODOS in-code). Once I have sorted these out, I
+plan to tag the version as v0.1 and work on an online demo through
+emscripten (or some variant).
+
+## Problems
+
+While all valid code should be working (except for one flaw), all working
+programs should produce valid code. Some invalid programs might not
+be checked during compilation, and therefore can cause runtime errors or
+undefined behavior. These include:
+
+- The interpreter wants to support UTF-8, but does not recognize the
+  Byte Order Mark. The scanner instead interprets it like the
+  beginning of an identifier.
+- Reads from io.out, io.err or writes to io.in are not checked during
+  compile-time and causes the VM to fail without helpful info as a runtime
+  error.
+- A processor node participating in more than one wire is not checked and
+  causes memory leaks and unexpected behavior. This should be checked and
+  forbidden during compile-time.
+- There is no sort of testing framework, so there's no indicator of whether
+  any change I make breaks preexisting code.
+
+## Contributing
+
+If you catch any issues or want to improve the compiler, I greatly
+appreciate any feedback in the 
+[SourceHut mailing list](https://lists.sr.ht/~shunter/public-inbox).
+Thanks!
 
 ## Language Specification
 
@@ -97,8 +134,6 @@ report.out -> io.out;
 ```
 
 ### cat
-
-An explicit implementation:
 
 ```c
 processor cat {
