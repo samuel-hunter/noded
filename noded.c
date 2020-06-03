@@ -231,7 +231,7 @@ scan_wire(Scanner *s, SymDict *dict, VM *vm, NodeRule *rules, size_t nrules)
 {
 	Token node1, port1, wire, node2, port2;
 	size_t node1_id, node2_id;
-	size_t node1_idx, node2_idx;
+	size_t node1_idx = 0, node2_idx = 0;
 	bool has_proc = false;
 	int port1idx = -1, port2idx = -1;
 	NodeRule *rule;

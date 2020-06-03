@@ -1,5 +1,5 @@
 
-CFLAGS := -std=c99 -Werror -Wall -Wextra -Wpedantic -g
+CFLAGS := -std=c99 -Werror -Wall -Wextra -Wpedantic -O2
 LDFLAGS :=
 PREFIX := /usr/local
 TARGS := noded nodedc
